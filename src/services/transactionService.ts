@@ -1,6 +1,6 @@
 import { ISO8583Message, MTI, TransactionResponse, Transaction, SimulationBatch } from '../types/iso8583';
 import { RESPONSE_CODES, generateTraceNumber, generateTransmissionDateTime, MOCK_CARDS } from '../utils/mockData';
-import { supabase } from '../supabaseClient';
+import { supabase } from '../utils/supabaseClient.ts'
 
 interface BatchTestParams {
   totalTransactions: number;
