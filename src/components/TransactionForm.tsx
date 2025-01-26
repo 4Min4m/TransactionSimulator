@@ -31,7 +31,7 @@ export default function TransactionForm() {
   const handleSingleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
+  
     const transaction: ISO8583Message = {
       mti: MTI.AUTHORIZATION_REQUEST,
       primaryAccountNumber: formData.cardNumber.replace(/\s/g, ''),
@@ -45,9 +45,9 @@ export default function TransactionForm() {
       terminalId: 'TERM001',
       merchantId: formData.merchantId
     };
-
+  
     try {
-      const response = TransactionService.processTransaction(transaction);
+      const response = await TransactionService.processTransaction(transaction);  
       setResult(response);
     } catch (error) {
       console.error('Transaction processing error:', error);
@@ -57,8 +57,9 @@ export default function TransactionForm() {
         data: transaction,
         responseCode: 'ERROR'
       });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleBatchSubmit = async (e: React.FormEvent) => {
@@ -164,8 +165,14 @@ export default function TransactionForm() {
               type="text"
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
               placeholder="4111 1111 1111 1111"
+              maxLength={19}
               value={formData.cardNumber}
-              onChange={(e) => setFormData({ ...formData, cardNumber: e.target.value })}
+              onChange={(e) => {
+                let value = e.target.value.replace(/[^0-9]/g, '');
+                value = value.slice(0, 16);
+                value = value.replace(/(.{4})/g, '$1 ').trim();
+                setFormData({ ...formData, cardNumber: value });
+              }}
             />
           </div>
 

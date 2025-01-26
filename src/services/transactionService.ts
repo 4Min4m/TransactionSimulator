@@ -24,17 +24,17 @@ const maskCardNumber = (cardNumber: string): string => {
 export class TransactionService {
   static async processTransaction(transaction: ISO8583Message): Promise<TransactionResponse> {
     const startTime = performance.now();
-    
+
     // Simulate processing delay
-    await new Promise(resolve => setTimeout(resolve, Math.random() * 1000));
-    
+    await new Promise((resolve) => setTimeout(resolve, Math.random() * 1000));
+
     // Simple validation logic
     if (!transaction.primaryAccountNumber || transaction.primaryAccountNumber.length < 15) {
       return {
         success: false,
         message: 'Invalid card number',
         data: transaction,
-        responseCode: RESPONSE_CODES.INVALID_CARD
+        responseCode: RESPONSE_CODES.INVALID_CARD,
       };
     }
 
@@ -43,7 +43,7 @@ export class TransactionService {
         success: false,
         message: 'Invalid amount',
         data: transaction,
-        responseCode: RESPONSE_CODES.INVALID_AMOUNT
+        responseCode: RESPONSE_CODES.INVALID_AMOUNT,
       };
     }
 
@@ -55,7 +55,7 @@ export class TransactionService {
       mti: MTI.AUTHORIZATION_RESPONSE,
       responseCode: isApproved ? RESPONSE_CODES.APPROVED : RESPONSE_CODES.DECLINED,
       transmissionDateTime: generateTransmissionDateTime(),
-      systemTraceNumber: generateTraceNumber()
+      systemTraceNumber: generateTraceNumber(),
     };
 
     // Store transaction in Supabase
@@ -66,15 +66,31 @@ export class TransactionService {
       merchant_id: transaction.merchantId,
       status: isApproved ? 'APPROVED' : 'DECLINED',
       timestamp: new Date().toISOString(),
-      iso8583_message: response
+      iso8583_message: response,
     };
 
-    const { error } = await supabase
-      .from('transactions')
-      .insert(dbTransaction);
+    try {
+      const { error } = await supabase.from('transactions').insert(dbTransaction);
 
-    if (error) {
-      console.error('Error storing transaction:', error);
+      if (error) {
+        console.error('Error storing transaction:', error);
+        return {
+          success: false,
+          message: 'Transaction failed to store in database',
+          data: response,
+          responseCode: RESPONSE_CODES.DB_ERROR,
+        };
+      }
+
+      console.log('Transaction stored successfully:', dbTransaction);
+    } catch (err) {
+      console.error('Unexpected error during DB operation:', err);
+      return {
+        success: false,
+        message: 'Unexpected database error',
+        data: response,
+        responseCode: RESPONSE_CODES.DB_ERROR,
+      };
     }
 
     return {
@@ -82,7 +98,9 @@ export class TransactionService {
       message: isApproved ? 'Transaction approved' : 'Transaction declined',
       data: response,
       responseCode: response.responseCode,
-      authorizationCode: isApproved ? Math.random().toString(36).slice(2, 8).toUpperCase() : undefined
+      authorizationCode: isApproved
+        ? Math.random().toString(36).slice(2, 8).toUpperCase()
+        : undefined,
     };
   }
 
