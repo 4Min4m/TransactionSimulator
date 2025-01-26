@@ -1,20 +1,27 @@
 from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-from app.models.transaction import TransactionRequest, TransactionResponse
-from app.models.batch import BatchRequest, BatchResponse
-from app.services.transaction_service import process_transaction
-from app.services.batch_service import process_batch
-from app.utils.supabase_client import supabase
+from .models.transaction import TransactionRequest, TransactionResponse
+from .models.batch import BatchRequest, BatchResponse
+from .services.transaction_service import process_transaction
+from .services.batch_service import process_batch
+from .utils.supabase_client import supabase
 
 app = FastAPI()
 
 # CORS middleware to allow frontend communication
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://refactored-acorn-g56qp9w79w7fppgq-5173.app.github.dev"],
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=True,
 )
+
+# Root endpoint
+@app.get("/")
+def read_root():
+    return {"message": "Welcome to the Payment Simulator API!"}
 
 @app.post("/process-transaction", response_model=TransactionResponse)
 async def process_transaction_endpoint(transaction: TransactionRequest):

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { CreditCard } from "lucide-react";
 import TransactionForm from "./components/TransactionForm";
 import BatchForm from "./components/BatchForm";

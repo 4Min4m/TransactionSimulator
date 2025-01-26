@@ -1,5 +1,7 @@
+const API_BASE_URL = "/api";
+
 export const processTransaction = async (data: any) => {
-  const response = await fetch("http://127.0.0.1:8000/process-transaction", {
+  const response = await fetch(`${API_BASE_URL}/process-transaction`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -8,7 +10,7 @@ export const processTransaction = async (data: any) => {
 };
 
 export const processBatch = async (data: any) => {
-  const response = await fetch("http://127.0.0.1:8000/process-batch", {
+  const response = await fetch(`${API_BASE_URL}/process-batch`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -17,6 +19,14 @@ export const processBatch = async (data: any) => {
 };
 
 export const getTransactions = async () => {
-  const response = await fetch("http://127.0.0.1:8000/transactions");
-  return response.json();
+  try {
+    const response = await fetch(`${API_BASE_URL}/transactions`);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return response.json();
+  } catch (error) {
+    console.error("Error fetching transactions:", error);
+    throw error;
+  }
 };
