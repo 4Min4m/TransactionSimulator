@@ -9,13 +9,21 @@ from .utils.supabase_client import supabase
 
 app = FastAPI()
 
-# CORS middleware to allow frontend communication
+# Allow specific origins
+origins = [
+    "http://localhost:3000",  # React frontend (or other frontend origin)
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "https://refactored-acorn-g56qp9w79w7fppgq-5173.app.github.dev",
+    "https://refactored-acorn-g56qp9w79w7fppgq-5173.app.github.dev:5173",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://refactored-acorn-g56qp9w79w7fppgq-5173.app.github.dev"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=origins,  # Allow these origins
     allow_credentials=True,
+    allow_methods=["*"],  # Allow all HTTP methods
+    allow_headers=["*"],  # Allow all headers
 )
 
 # Root endpoint
