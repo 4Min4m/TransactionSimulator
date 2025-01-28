@@ -3,10 +3,10 @@ import { Hash, Wallet, Timer, Building2, Send } from "lucide-react";
 import { processBatch } from "../services/api";
 
 export default function BatchForm() {
-  const [totalTransactions, setTotalTransactions] = useState(100);
-  const [totalAmount, setTotalAmount] = useState(10000);
-  const [durationSeconds, setDurationSeconds] = useState(60);
-  const [merchantId, setMerchantId] = useState("MERCH001");
+  const [total_transactions, setTotalTransactions] = useState(100);
+  const [total_amount, setTotalAmount] = useState(10000);
+  const [duration_seconds, setDurationSeconds] = useState(60);
+  const [merchant_id, setMerchantId] = useState("MERCH001");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
 
@@ -16,10 +16,10 @@ export default function BatchForm() {
 
     try {
       const response = await processBatch({
-        totalTransactions,
-        totalAmount,
-        durationSeconds,
-        merchantId,
+        total_transactions,
+        total_amount,
+        duration_seconds,
+        merchant_id,
       });
       setResult(response);
     } catch (error) {
@@ -43,7 +43,7 @@ export default function BatchForm() {
           type="number"
           min="1"
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-          value={totalTransactions}
+          value={total_transactions}
           onChange={(e) => setTotalTransactions(parseInt(e.target.value))}
         />
       </div>
@@ -60,7 +60,7 @@ export default function BatchForm() {
           min="0"
           step="0.01"
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-          value={totalAmount}
+          value={total_amount}
           onChange={(e) => setTotalAmount(parseFloat(e.target.value))}
         />
       </div>
@@ -76,7 +76,7 @@ export default function BatchForm() {
           type="number"
           min="1"
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-          value={durationSeconds}
+          value={duration_seconds}
           onChange={(e) => setDurationSeconds(parseInt(e.target.value))}
         />
       </div>
@@ -90,7 +90,7 @@ export default function BatchForm() {
         </label>
         <select
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-          value={merchantId}
+          value={merchant_id}
           onChange={(e) => setMerchantId(e.target.value)}
         >
           <option value="MERCH001">Example Store</option>

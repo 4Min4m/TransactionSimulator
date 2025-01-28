@@ -3,9 +3,9 @@ import { CreditCard, DollarSign, Building2, Send } from "lucide-react";
 import { processTransaction } from "../services/api";
 
 export default function TransactionForm() {
-  const [cardNumber, setCardNumber] = useState("");
+  const [card_number, setCardNumber] = useState("");
   const [amount, setAmount] = useState("");
-  const [merchantId, setMerchantId] = useState("MERCH001");
+  const [merchant_id, setMerchantId] = useState("MERCH001");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
 
@@ -15,9 +15,9 @@ export default function TransactionForm() {
 
     try {
       const response = await processTransaction({
-        cardNumber,
+        card_number,
         amount: parseFloat(amount),
-        merchantId,
+        merchant_id,
       });
       setResult(response);
     } catch (error) {
@@ -41,8 +41,15 @@ export default function TransactionForm() {
           type="text"
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
           placeholder="4111 1111 1111 1111"
-          value={cardNumber}
-          onChange={(e) => setCardNumber(e.target.value)}
+          value={card_number}
+          maxLength={19}
+          onChange={(e) => {
+            let value = e.target.value.replace(/[^0-9]/g, '');
+            value = value.slice(0, 16);
+            value = value.replace(/(.{4})/g, '$1 ').trim();
+            setCardNumber(e.target.value);
+          }
+        }
         />
       </div>
 
@@ -72,7 +79,7 @@ export default function TransactionForm() {
         </label>
         <select
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-          value={merchantId}
+          value={merchant_id}
           onChange={(e) => setMerchantId(e.target.value)}
         >
           <option value="MERCH001">Example Store</option>

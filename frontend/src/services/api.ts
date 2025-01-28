@@ -6,6 +6,11 @@ export const processTransaction = async (data: any) => {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
+  if (!response.ok) {
+    const errorData = await response.json();
+    console.error("Validation errors:", errorData);
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
   return response.json();
 };
 
