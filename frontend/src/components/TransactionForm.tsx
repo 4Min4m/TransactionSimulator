@@ -11,24 +11,26 @@ export default function TransactionForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-      // Frontend validation
-  if (!cardNumber || cardNumber.length !== 16 || !/^\d+$/.test(cardNumber)) {
-    alert("Invalid card number. It must be exactly 16 digits.");
-    return;
-  }
+    
+    const cleanedCardNumber = card_number.replace(/\s/g, '');
 
-  if (!amount || parseFloat(amount) <= 0) {
-    alert("Amount must be greater than 0.");
-    return;
-  }
+    const parsedAmount = parseFloat(amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      alert("Amount must be a valid number greater than 0.");
+      return;
+    }
     setLoading(true);
 
     try {
-      const response = await processTransaction({
-        card_number: cardNumber,
-        amount: parseFloat(amount),
-        merchant_id: merchantId,
-      });
+      const payload = {
+        card_number: cleanedCardNumber,
+        amount: parsedAmount,
+        merchant_id: merchant_id,
+      };
+  
+      console.log("Sending payload:", payload);  // چک داده‌های ارسالی
+  
+      const response = await processTransaction(payload);
       setResult(response);
     } catch (error) {
       console.error("Error processing transaction:", error);
@@ -57,9 +59,8 @@ export default function TransactionForm() {
             let value = e.target.value.replace(/[^0-9]/g, '');
             value = value.slice(0, 16);
             value = value.replace(/(.{4})/g, '$1 ').trim();
-            setCardNumber(e.target.value);
-          }
-        }
+            setCardNumber(value);
+          }}
         />
       </div>
 
