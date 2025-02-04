@@ -11,13 +11,23 @@ export default function TransactionForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+      // Frontend validation
+  if (!cardNumber || cardNumber.length !== 16 || !/^\d+$/.test(cardNumber)) {
+    alert("Invalid card number. It must be exactly 16 digits.");
+    return;
+  }
+
+  if (!amount || parseFloat(amount) <= 0) {
+    alert("Amount must be greater than 0.");
+    return;
+  }
     setLoading(true);
 
     try {
       const response = await processTransaction({
-        card_number,
+        card_number: cardNumber,
         amount: parseFloat(amount),
-        merchant_id,
+        merchant_id: merchantId,
       });
       setResult(response);
     } catch (error) {

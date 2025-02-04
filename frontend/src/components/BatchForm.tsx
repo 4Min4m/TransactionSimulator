@@ -13,13 +13,13 @@ export default function BatchForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
+  
     try {
       const response = await processBatch({
-        total_transactions,
-        total_amount,
-        duration_seconds,
-        merchant_id,
+        total_transactions: totalTransactions,
+        total_amount: totalAmount,
+        duration_seconds: durationSeconds,
+        merchant_id: merchantId,
       });
       setResult(response);
     } catch (error) {
