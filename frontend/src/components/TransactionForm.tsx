@@ -28,7 +28,7 @@ export default function TransactionForm() {
         merchant_id: merchant_id,
       };
   
-      console.log("Sending payload:", payload);  // چک داده‌های ارسالی
+      console.log("Sending payload:", payload);
   
       const response = await processTransaction(payload);
       setResult(response);
