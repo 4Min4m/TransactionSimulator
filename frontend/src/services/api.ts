@@ -15,12 +15,25 @@ export const processTransaction = async (data: any) => {
 };
 
 export const processBatch = async (data: any) => {
-  const response = await fetch(`${API_BASE_URL}/process-batch`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  return response.json();
+  try {
+    const response = await fetch(`${API_BASE_URL}/process-batch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Validation errors:", errorData);
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const responseData = await response.json();
+    return responseData;
+  } catch (error) {
+    console.error("Error processing batch:", error);
+    throw error;
+  }
 };
 
 export const getTransactions = async () => {

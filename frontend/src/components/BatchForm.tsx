@@ -3,8 +3,8 @@ import { Hash, Wallet, Timer, Building2, Send } from "lucide-react";
 import { processBatch } from "../services/api";
 
 export default function BatchForm() {
-  const [total_transactions, setTotalTransactions] = useState(100);
-  const [total_amount, setTotalAmount] = useState(10000);
+  const [total_transactions, setTotalTransactions] = useState(10);
+  const [total_amount, setTotalAmount] = useState(1000);
   const [duration_seconds, setDurationSeconds] = useState(60);
   const [merchant_id, setMerchantId] = useState("MERCH001");
   const [loading, setLoading] = useState(false);

@@ -1,11 +1,12 @@
-from app.models.batch import BatchResponse
+from app.models.batch import BatchRequest, BatchResponse
+from app.models.transaction import TransactionRequest  # Import TransactionRequest
 from app.services.transaction_service import process_transaction
 import time
 
-def process_batch(batch: dict) -> BatchResponse:
-    total_transactions = batch["total_transactions"]
-    amount_per_transaction = batch["total_amount"] / total_transactions
-    delay_between_transactions = batch["duration_seconds"] / total_transactions
+def process_batch(batch: BatchRequest) -> BatchResponse:
+    total_transactions = batch.total_transactions
+    amount_per_transaction = batch.total_amount / total_transactions
+    delay_between_transactions = batch.duration_seconds / total_transactions
 
     success_count = 0
     failure_count = 0
@@ -16,11 +17,12 @@ def process_batch(batch: dict) -> BatchResponse:
     for _ in range(total_transactions):
         start_time = time.time()
 
-        transaction = {
-            "card_number": "4111111111111111",  # Mock card number
-            "amount": amount_per_transaction,
-            "merchant_id": batch["merchant_id"],
-        }
+        # Create a TransactionRequest object
+        transaction = TransactionRequest(
+            card_number="4111111111111111",  # Mock card number
+            amount=amount_per_transaction,
+            merchant_id=batch.merchant_id,
+        )
 
         response = process_transaction(transaction)
         if response.success:
