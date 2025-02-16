@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 import os
 from supabase import create_client, Client
 
-load_dotenv("/workspaces/ps-test/backend/.env")
+load_dotenv("/workspaces/TransactionSimulator/backend/.env")
 
 # Load environment variables
 supabase_url = os.getenv("SUPABASE_URL")
