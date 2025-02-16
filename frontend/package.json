@@ -9,10 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.21.0",
     "lucide-react": "^0.264.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "@supabase/supabase-js": "^2.21.0"
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.45",
@@ -21,7 +21,7 @@
     "autoprefixer": "^10.4.16",
     "postcss": "^8.4.31",
     "tailwindcss": "^3.3.5",
-    "typescript": "^5.2.2",
-    "vite": "^5.0.8"
+    "typescript": "^5.7.3",
+    "vite": "^5.4.14"
   }
 }
