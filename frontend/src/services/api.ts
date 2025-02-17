@@ -1,7 +1,7 @@
 const API_BASE_URL = "https://transactionsimulator.onrender.com";
 
 export const processTransaction = async (data: any) => {
-  const response = await fetch(`${API_BASE_URL}/process-transaction`, {
+  const response = await fetch(`${API_BASE_URL}/api/process-transaction`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -16,7 +16,7 @@ export const processTransaction = async (data: any) => {
 
 export const processBatch = async (data: any) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/process-batch`, {
+    const response = await fetch(`${API_BASE_URL}/api/process-batch`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
@@ -38,7 +38,7 @@ export const processBatch = async (data: any) => {
 
 export const getTransactions = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/transactions`);
+    const response = await fetch(`${API_BASE_URL}/api/transactions`);
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
