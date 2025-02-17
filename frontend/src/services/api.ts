@@ -1,4 +1,4 @@
-const API_BASE_URL = "/api";
+const API_BASE_URL = "https://transactionsimulator.onrender.com";
 
 export const processTransaction = async (data: any) => {
   const response = await fetch(`${API_BASE_URL}/process-transaction`, {

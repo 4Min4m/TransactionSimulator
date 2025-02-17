@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from .models.transaction import TransactionRequest, TransactionResponse
@@ -8,7 +9,7 @@ from .services.batch_service import process_batch
 from .utils.supabase_client import supabase
 
 app = FastAPI()
-
+app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="static")
 # Allow specific origins
 origins = [
     "http://localhost:3000",  # React frontend (or other frontend origin)
