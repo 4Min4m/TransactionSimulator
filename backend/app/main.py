@@ -16,6 +16,7 @@ origins = [
     "http://localhost:5173",
     "https://refactored-acorn-g56qp9w79w7fppgq-5173.app.github.dev",
     "https://refactored-acorn-g56qp9w79w7fppgq-5173.app.github.dev:5173",
+    "https://trasimu.onrender.com",  # Render frontend URL
 ]
 
 app.add_middleware(
