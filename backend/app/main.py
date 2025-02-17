@@ -33,21 +33,21 @@ app.add_middleware(
 def read_root():
     return {"message": "Welcome to the Payment Simulator API!"}
 
-@app.post("/process-transaction", response_model=TransactionResponse)
+@app.post("/api/process-transaction", response_model=TransactionResponse)
 async def process_transaction_endpoint(transaction: TransactionRequest):
     try:
         return process_transaction(transaction)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@app.post("/process-batch", response_model=BatchResponse)
+@app.post("/api/process-batch", response_model=BatchResponse)
 async def process_batch_endpoint(batch: BatchRequest):
     try:
         return process_batch(batch)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@app.get("/transactions")
+@app.get("/api/transactions")
 async def get_transactions():
     try:
         result = supabase.table("transactions").select("*").execute()
