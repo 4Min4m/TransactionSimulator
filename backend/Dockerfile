@@ -1,6 +1,13 @@
-FROM python:3.9-slim
+FROM node:18-alpine
+
 WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
+
+COPY package*.json ./
+
+RUN npm ci --only=production
+
 COPY . .
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+EXPOSE 8000
+
+CMD ["node", "src/server.js"]
