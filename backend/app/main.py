@@ -9,7 +9,6 @@ from .services.batch_service import process_batch
 from .utils.supabase_client import supabase
 
 app = FastAPI()
-app.mount("/static", StaticFiles(directory="frontend/dist", html=True), name="static")
 # Allow specific origins
 origins = [
     "http://localhost:3000",  # React frontend (or other frontend origin)
