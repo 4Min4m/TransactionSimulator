@@ -1,6 +1,0 @@
-fastapi
-uvicorn
-supabase
-python-dotenv
-pydantic
-pytest
