@@ -24,11 +24,18 @@ export default function TransactionHistory() {
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-medium text-gray-900">Transaction History</h3>
+      <h3 className="text-lg font-medium text-gray-900">Last Transaction</h3>
       <div className="bg-gray-50 p-4 rounded-md">
-        <pre className="overflow-auto text-sm">
-          {JSON.stringify(transactions, null, 2)}
-        </pre>
+        {transactions.length > 0 ? (
+          <div>
+            <p><strong>Card Number:</strong> {transactions[0].card_number}</p>
+            <p><strong>Amount:</strong> ${transactions[0].amount}</p>
+            <p><strong>Status:</strong> {transactions[0].status}</p>
+            <p><strong>Timestamp:</strong> {new Date(transactions[0].timestamp).toLocaleString()}</p>
+          </div>
+        ) : (
+          <p>No transactions found.</p>
+        )}
       </div>
     </div>
   );
