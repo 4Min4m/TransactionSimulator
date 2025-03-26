@@ -3,6 +3,7 @@ import { CreditCard } from "lucide-react";
 import TransactionForm from "./components/TransactionForm";
 import BatchForm from "./components/BatchForm";
 import TransactionHistory from "./components/TransactionHistory";
+import TransactionChart from "./components/TransactionChart";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<"single" | "batch">("single");
@@ -50,6 +51,7 @@ export default function App() {
 
           {activeTab === "single" ? <TransactionForm /> : <BatchForm />}
           <TransactionHistory />
+          <TransactionChart />
         </div>
       </div>
     </div>
