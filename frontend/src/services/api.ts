@@ -1,29 +1,29 @@
-const API_BASE_URL = "https://transactionsimulator.onrender.com";
+import { TransactionResponse } from "../types/iso8583";
 
-export const processTransaction = async (data: any, token: string) => {
-  const response = await fetch(`${API_BASE_URL}/api/process-transaction`, {
+const API_BASE_URL = "https://glorious-space-goldfish-9qw9xv459qj3qqv-8000.app.github.dev";
+
+export const processTransaction = async (data: any): Promise<TransactionResponse> => {
+  const response = await fetch(`${API_BASE_URL}/api/public/process-transaction`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(data),
   });
   if (!response.ok) {
     const errorData = await response.json();
     console.error("Validation errors:", errorData);
-    throw new Error(`HTTP error! status: ${response.status}`);
+    throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
   }
   return response.json();
 };
 
-export const processBatch = async (data: any, token: string) => {
+export const processBatch = async (data: any): Promise<any> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/process-batch`, {
+    const response = await fetch(`${API_BASE_URL}/api/public/process-batch`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(data),
     });
@@ -31,28 +31,28 @@ export const processBatch = async (data: any, token: string) => {
     if (!response.ok) {
       const errorData = await response.json();
       console.error("Validation errors:", errorData);
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
     }
 
-    const responseData = await response.json();
-    return responseData;
+    return await response.json();
   } catch (error) {
     console.error("Error processing batch:", error);
     throw error;
   }
 };
 
-export const getTransactions = async (token: string) => {
+export const getTransactions = async (): Promise<any[]> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/transactions`, {
+    const response = await fetch(`${API_BASE_URL}/api/public/transactions`, {
       headers: {
-        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
       },
     });
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorData = await response.json();
+      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
     }
-    return response.json();
+    return await response.json();
   } catch (error) {
     console.error("Error fetching transactions:", error);
     throw error;

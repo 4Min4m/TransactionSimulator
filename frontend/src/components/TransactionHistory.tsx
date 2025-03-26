@@ -1,30 +1,34 @@
 import { useEffect, useState } from "react";
-import { getTransactions } from "../services/api";
+import { supabase } from "../utils/supabaseClient";
 
-interface TransactionHistoryProps {
-  token: string;
-}
-
-export default function TransactionHistory({ token }: TransactionHistoryProps) {
+export default function TransactionHistory() {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const data = await getTransactions(token);
-        setTransactions(data);
-      } catch (error) {
+        const { data, error } = await supabase
+          .from("transactions")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(1); // فقط آخرین تراکنش
+        if (error) throw new Error(error.message);
+        setTransactions(data || []);
+      } catch (error: any) {
         console.error("Error fetching transactions:", error);
+        setError(error.message || "Failed to fetch transactions");
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, [token]);
+  }, []);
 
   if (loading) return <p>Loading...</p>;
+  if (error) return <p className="text-red-600">{error}</p>;
 
   return (
     <div className="space-y-4">

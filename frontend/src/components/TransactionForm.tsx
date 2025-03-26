@@ -2,11 +2,7 @@ import React, { useState } from "react";
 import { CreditCard, DollarSign, Building2, Send } from "lucide-react";
 import { processTransaction } from "../services/api";
 
-interface TransactionFormProps {
-  token: string;
-}
-
-export default function TransactionForm({ token }: TransactionFormProps) {
+export default function TransactionForm() {
   const [card_number, setCardNumber] = useState("");
   const [amount, setAmount] = useState("");
   const [merchant_id, setMerchantId] = useState("MERCH001");
@@ -32,7 +28,7 @@ export default function TransactionForm({ token }: TransactionFormProps) {
         merchant_id: merchant_id,
       };
 
-      const response = await processTransaction(payload, token);
+      const response = await processTransaction(payload); // توکن حذف شده
       setResult(response);
     } catch (error) {
       console.error("Error processing transaction:", error);

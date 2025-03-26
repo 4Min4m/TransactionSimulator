@@ -5,18 +5,15 @@ import { getTransactions } from "../services/api";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
-interface TransactionChartProps {
-  token: string;
-}
-
-export default function TransactionChart({ token }: TransactionChartProps) {
+export default function TransactionChart() {
   const [chartData, setChartData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const transactions = await getTransactions(token);
+        const transactions = await getTransactions(); // توکن حذف شده
         const successCount = transactions.filter((tx: any) => tx.status === "APPROVED").length;
         const failureCount = transactions.filter((tx: any) => tx.status === "DECLINED").length;
 
@@ -32,15 +29,17 @@ export default function TransactionChart({ token }: TransactionChartProps) {
         });
       } catch (error) {
         console.error("Error fetching transactions for chart:", error);
+        setError("Failed to fetch transactions");
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, [token]);
+  }, []);
 
   if (loading) return <p>Loading chart...</p>;
+  if (error) return <p className="text-red-600">{error}</p>;
 
   return (
     <div className="space-y-4">

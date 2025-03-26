@@ -2,11 +2,7 @@ import React, { useState } from "react";
 import { Hash, Wallet, Timer, Building2, Send } from "lucide-react";
 import { processBatch } from "../services/api";
 
-interface BatchFormProps {
-  token: string;
-}
-
-export default function BatchForm({ token }: BatchFormProps) {
+export default function BatchForm() {
   const [total_transactions, setTotalTransactions] = useState(10);
   const [total_amount, setTotalAmount] = useState(1000);
   const [duration_seconds, setDurationSeconds] = useState(60);
@@ -19,15 +15,12 @@ export default function BatchForm({ token }: BatchFormProps) {
     setLoading(true);
 
     try {
-      const response = await processBatch(
-        {
-          total_transactions: total_transactions,
-          total_amount: total_amount,
-          duration_seconds: duration_seconds,
-          merchant_id: merchant_id,
-        },
-        token
-      );
+      const response = await processBatch({
+        total_transactions,
+        total_amount,
+        duration_seconds,
+        merchant_id,
+      }); // توکن حذف شده
       setResult(response);
     } catch (error) {
       console.error("Error processing batch:", error);
@@ -118,7 +111,7 @@ export default function BatchForm({ token }: BatchFormProps) {
       {result && (
         <div className="mt-4 p-4 rounded-md bg-gray-50">
           <p className="text-sm text-gray-800">
-            Success: {result.successCount}, Failures: {result.failureCount}
+            Success: {result.success_count}, Failures: {result.failure_count}
           </p>
         </div>
       )}

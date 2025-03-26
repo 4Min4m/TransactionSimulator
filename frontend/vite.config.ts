@@ -9,8 +9,10 @@ export default defineConfig({
         target: "http://localhost:8000",
         changeOrigin: true,
         secure: false,
-        logLevel: "debug", // اضافه کردن لاگ برای دیباگ
+        rewrite: (path) => path.replace(/^\/api/, "/api"),
       },
     },
+    host: "0.0.0.0", // برای Codespace
+    port: 5173,
   },
 });
