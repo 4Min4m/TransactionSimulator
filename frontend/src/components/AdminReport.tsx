@@ -50,7 +50,7 @@ export default function AdminReport({ token }: AdminReportProps) {
         const totalAmount = transactions.reduce((sum, tx) => sum + tx.amount, 0);
         const successfulTransactions = transactions.filter((tx) => tx.status === "APPROVED").length;
         const failedTransactions = transactions.filter((tx) => tx.status === "DECLINED").length;
-        const successRate = totalTransactions > 0 ? (successfulTransactions / totalTransactions) * 100 : 0;
+      //  const successRate = totalTransactions > 0 ? (successfulTransactions / totalTransactions) * 100 : 0;
         const avgResponseTime = 120; // test
 
         setReport({
