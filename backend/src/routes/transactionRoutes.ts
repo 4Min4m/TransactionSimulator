@@ -5,7 +5,28 @@ import { authenticateToken } from "../middleware/auth";
 
 const router = Router();
 
-const processTransactionHandler = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+// مسیر محافظت‌شده (نیاز به توکن)
+router.get("/transactions", authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const transactions = await getTransactions();
+    res.status(200).json(transactions);
+  } catch (error: any) {
+    next(error);
+  }
+});
+
+// مسیر عمومی (بدون نیاز به توکن)
+router.get("/public/transactions", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const transactions = await getTransactions();
+    res.status(200).json(transactions);
+  } catch (error: any) {
+    next(error);
+  }
+});
+
+// مسیرهای دیگه (مثل process-transaction) هم همین‌طور
+router.post("/process-transaction", authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const transaction = req.body;
     const response = await processTransaction(transaction);
@@ -13,18 +34,16 @@ const processTransactionHandler = async (req: Request, res: Response, next: Next
   } catch (error: any) {
     next(error);
   }
-};
+});
 
-const getTransactionsHandler = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+router.post("/public/process-transaction", async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const transactions = await getTransactions();
-    res.status(200).json(transactions);
+    const transaction = req.body;
+    const response = await processTransaction(transaction);
+    res.status(200).json(response);
   } catch (error: any) {
     next(error);
   }
-};
-
-router.post("/process-transaction", authenticateToken, processTransactionHandler);
-router.get("/transactions", authenticateToken, getTransactionsHandler);
+});
 
 export default router;

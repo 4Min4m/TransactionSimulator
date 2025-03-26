@@ -10,6 +10,7 @@ const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret";
 const loginHandler = async (req, res, next) => {
     try {
         const { username, password } = req.body;
+        console.log("Received:", { username, password });
         // اعتبارسنجی ساده
         if (username !== "admin" || password !== "password") {
             res.status(401).json({ detail: "Invalid credentials" });

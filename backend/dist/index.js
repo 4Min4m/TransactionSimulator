@@ -16,15 +16,24 @@ const express4_1 = require("@apollo/server/express4");
 const schema_1 = require("./graphql/schema");
 const body_parser_1 = require("body-parser");
 dotenv_1.default.config({ path: "./.env" });
+console.log("FRONTEND_URL:", process.env.FRONTEND_URL);
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 8000;
-app.use(express_1.default.json());
+// تنظیم CORS
 app.use((req, res, next) => {
-    res.header("Access-Control-Allow-Origin", "*");
+    const origin = req.headers.origin;
+    if (origin === process.env.FRONTEND_URL || origin === "http://localhost:5173") {
+        res.header("Access-Control-Allow-Origin", origin);
+    }
     res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.header("Access-Control-Allow-Credentials", "true");
+    if (req.method === "OPTIONS") {
+        return res.status(200).end();
+    }
     next();
 });
+app.use(express_1.default.json());
 app.get("/", (req, res) => {
     res.json({ message: "Welcome to the Payment Simulator API!" });
 });
@@ -36,24 +45,18 @@ const apolloServer = new server_1.ApolloServer({
     resolvers: schema_1.resolvers,
 });
 async function startServer() {
-    // Create HTTP server
     const httpServer = http_1.default.createServer(app);
-    // Start Apollo Server
     await apolloServer.start();
-    // Apply middleware
     app.use("/graphql", (0, body_parser_1.json)(), auth_1.authenticateToken, (0, express4_1.expressMiddleware)(apolloServer, {
         context: async ({ req, res }) => ({
             req,
             res,
         }),
     }));
-    // Start the server
     httpServer.listen(PORT, () => {
         console.log(`🚀 Server running on port ${PORT}`);
         console.log(`🚀 GraphQL endpoint at http://localhost:${PORT}/graphql`);
     });
 }
-// Call the async function to start the server
 startServer().catch(console.error);
-// Error handling middleware
 app.use(errorHandler_1.errorHandler);
