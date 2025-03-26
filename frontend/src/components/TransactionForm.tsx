@@ -2,7 +2,11 @@ import React, { useState } from "react";
 import { CreditCard, DollarSign, Building2, Send } from "lucide-react";
 import { processTransaction } from "../services/api";
 
-export default function TransactionForm() {
+interface TransactionFormProps {
+  token: string;
+}
+
+export default function TransactionForm({ token }: TransactionFormProps) {
   const [card_number, setCardNumber] = useState("");
   const [amount, setAmount] = useState("");
   const [merchant_id, setMerchantId] = useState("MERCH001");
@@ -11,8 +15,8 @@ export default function TransactionForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    const cleanedCardNumber = card_number.replace(/\s/g, '');
+
+    const cleanedCardNumber = card_number.replace(/\s/g, "");
 
     const parsedAmount = parseFloat(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
@@ -27,8 +31,8 @@ export default function TransactionForm() {
         amount: parsedAmount,
         merchant_id: merchant_id,
       };
-  
-      const response = await processTransaction(payload);
+
+      const response = await processTransaction(payload, token);
       setResult(response);
     } catch (error) {
       console.error("Error processing transaction:", error);
@@ -54,9 +58,9 @@ export default function TransactionForm() {
           value={card_number}
           maxLength={19}
           onChange={(e) => {
-            let value = e.target.value.replace(/[^0-9]/g, '');
+            let value = e.target.value.replace(/[^0-9]/g, "");
             value = value.slice(0, 16);
-            value = value.replace(/(.{4})/g, '$1 ').trim();
+            value = value.replace(/(.{4})/g, "$1 ").trim();
             setCardNumber(value);
           }}
         />

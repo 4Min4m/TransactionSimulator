@@ -1,9 +1,10 @@
 import { Router, Request, Response } from "express";
 import { processBatch } from "../services/batchService";
+import { authenticateToken } from "../middleware/auth";
 
 const router = Router();
 
-router.post("/process-batch", async (req: Request, res: Response) => {
+router.post("/process-batch", authenticateToken, async (req: Request, res: Response) => {
   try {
     const batch = req.body;
     const response = await processBatch(batch);

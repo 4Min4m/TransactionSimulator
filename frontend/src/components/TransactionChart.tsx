@@ -5,14 +5,18 @@ import { getTransactions } from "../services/api";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
-export default function TransactionChart() {
+interface TransactionChartProps {
+  token: string;
+}
+
+export default function TransactionChart({ token }: TransactionChartProps) {
   const [chartData, setChartData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const transactions = await getTransactions();
+        const transactions = await getTransactions(token);
         const successCount = transactions.filter((tx: any) => tx.status === "APPROVED").length;
         const failureCount = transactions.filter((tx: any) => tx.status === "DECLINED").length;
 
@@ -34,7 +38,7 @@ export default function TransactionChart() {
     };
 
     fetchData();
-  }, []);
+  }, [token]);
 
   if (loading) return <p>Loading chart...</p>;
 

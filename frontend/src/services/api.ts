@@ -1,9 +1,12 @@
 const API_BASE_URL = "https://transactionsimulator.onrender.com";
 
-export const processTransaction = async (data: any) => {
+export const processTransaction = async (data: any, token: string) => {
   const response = await fetch(`${API_BASE_URL}/api/process-transaction`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
     body: JSON.stringify(data),
   });
   if (!response.ok) {
@@ -14,11 +17,14 @@ export const processTransaction = async (data: any) => {
   return response.json();
 };
 
-export const processBatch = async (data: any) => {
+export const processBatch = async (data: any, token: string) => {
   try {
     const response = await fetch(`${API_BASE_URL}/api/process-batch`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
       body: JSON.stringify(data),
     });
 
@@ -36,9 +42,13 @@ export const processBatch = async (data: any) => {
   }
 };
 
-export const getTransactions = async () => {
+export const getTransactions = async (token: string) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/transactions`);
+    const response = await fetch(`${API_BASE_URL}/api/transactions`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
