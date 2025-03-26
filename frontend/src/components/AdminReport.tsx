@@ -25,6 +25,7 @@ export default function AdminReport({ token }: AdminReportProps) {
     successfulTransactions: number;
     failedTransactions: number;
     avgResponseTime: number;
+    successRate: number;
     recentActivity: Transaction[];
   } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,14 +35,18 @@ export default function AdminReport({ token }: AdminReportProps) {
   useEffect(() => {
     const fetchReport = async () => {
       try {
-        const response = await fetch("https://transactionsimulator.onrender.com/api/transactions", {
+        const apiUrl = import.meta.env.VITE_ENV === "production" ? import.meta.env.VITE_API_URL : "";
+        const response = await fetch(`${apiUrl}/api/transactions`, {
+          method: "GET",
           headers: {
+            "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
         });
 
         if (!response.ok) {
-          throw new Error("Failed to fetch transactions");
+          const errorData = await response.json();
+          throw new Error(errorData.detail || "Failed to fetch transactions");
         }
 
         const transactions: Transaction[] = await response.json();
@@ -50,7 +55,7 @@ export default function AdminReport({ token }: AdminReportProps) {
         const totalAmount = transactions.reduce((sum, tx) => sum + tx.amount, 0);
         const successfulTransactions = transactions.filter((tx) => tx.status === "APPROVED").length;
         const failedTransactions = transactions.filter((tx) => tx.status === "DECLINED").length;
-      //  const successRate = totalTransactions > 0 ? (successfulTransactions / totalTransactions) * 100 : 0;
+        const successRate = totalTransactions > 0 ? (successfulTransactions / totalTransactions) * 100 : 0;
         const avgResponseTime = 120; // test
 
         setReport({
@@ -58,11 +63,12 @@ export default function AdminReport({ token }: AdminReportProps) {
           totalAmount,
           successfulTransactions,
           failedTransactions,
+          successRate,
           avgResponseTime,
           recentActivity: transactions.slice(0, 5),
         });
       } catch (err: any) {
-        setError(err.message || "An error occurred");
+        setError(err.message || "An error occurred while fetching transactions");
       } finally {
         setLoading(false);
       }
@@ -115,9 +121,7 @@ export default function AdminReport({ token }: AdminReportProps) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-500">Success Rate</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {((report.successfulTransactions / report.totalTransactions) * 100).toFixed(1)}%
-                </p>
+                <p className="text-2xl font-bold text-gray-900">{report.successRate.toFixed(1)}%</p>
               </div>
               <PieChart className="h-10 w-10 text-blue-500" />
             </div>

@@ -8,6 +8,9 @@ const loginHandler = async (req: Request, res: Response, next: NextFunction): Pr
   try {
     const { username, password } = req.body;
 
+
+    console.log("Received:", { username, password });
+    
     // اعتبارسنجی ساده
     if (username !== "admin" || password !== "password") {
       res.status(401).json({ detail: "Invalid credentials" });

@@ -16,21 +16,27 @@ export default function SignInForm({ onSignIn }: SignInFormProps) {
     setLoading(true);
     setError("");
 
+    const trimmedUsername = username.trim();
+    const trimmedPassword = password.trim();
+    console.log("Sending:", { username: trimmedUsername, password: trimmedPassword });
+
     try {
-      const response = await fetch("/api/login", {
+      const apiUrl = import.meta.env.VITE_ENV === "production" ? import.meta.env.VITE_API_URL : "";
+      const response = await fetch(`${apiUrl}/api/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username: trimmedUsername, password: trimmedPassword }),
       });
 
       if (!response.ok) {
-        throw new Error("Invalid credentials");
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Invalid credentials");
       }
 
       const data = await response.json();
       onSignIn(data.token);
     } catch (err: any) {
-      setError(err.message || "An error occurred");
+      setError(err.message || "An error occurred while signing in");
     } finally {
       setLoading(false);
     }
