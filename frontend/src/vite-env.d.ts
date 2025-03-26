@@ -1,11 +1,15 @@
-// src/vite-env.d.ts
-/// <reference types="vite/client" />
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
 
-interface ImportMetaEnv {
-    readonly VITE_SUPABASE_URL: string;
-    readonly VITE_SUPABASE_KEY: string;
-  }
-  
-  interface ImportMeta {
-    readonly env: ImportMetaEnv;
-  }
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    proxy: {
+      "/api": {
+        target: "https://glorious-space-goldfish-9qw9xv459qj3qqv-8000.app.github.dev",
+        changeOrigin: true,
+        secure: false, // برای Codespaces که از HTTPS استفاده می‌کنه
+      },
+    },
+  },
+});
