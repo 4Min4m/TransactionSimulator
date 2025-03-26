@@ -1,4 +1,6 @@
-import express, { Application, Request, Response } from "express";
+import express from "express";
+import type { Express, Request, Response, NextFunction } from "express";
+import http from "http";
 import dotenv from "dotenv";
 import transactionRoutes from "./routes/transactionRoutes";
 import batchRoutes from "./routes/batchRoutes";
@@ -8,25 +10,22 @@ import { authenticateToken } from "./middleware/auth";
 import { ApolloServer } from "@apollo/server";
 import { expressMiddleware } from "@apollo/server/express4";
 import { typeDefs, resolvers } from "./graphql/schema";
+import { json } from "body-parser";
 
-// loading environments
-dotenv.config();
+dotenv.config({ path: "./.env" });
 
-const app: Application = express();
+const app: Express = express();
 const PORT = process.env.PORT || 8000;
 
-// Middleware parsing JSON
 app.use(express.json());
 
-// set up CORS
-app.use((req: Request, res: Response, next) => {
+app.use((req: Request, res: Response, next: NextFunction) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
   next();
 });
 
-// routes
 app.get("/", (req: Request, res: Response) => {
   res.json({ message: "Welcome to the Payment Simulator API!" });
 });
@@ -35,28 +34,40 @@ app.use("/api", authRoutes);
 app.use("/api", transactionRoutes);
 app.use("/api", batchRoutes);
 
-// set Apollo Server for GraphQL
 const apolloServer = new ApolloServer({
   typeDefs,
   resolvers,
 });
 
-(async () => {
+async function startServer() {
+  // Create HTTP server
+  const httpServer = http.createServer(app);
+
+  // Start Apollo Server
   await apolloServer.start();
+
+  // Apply middleware
   app.use(
-    "/graphql",
+    "/graphql", 
+    json(),
     authenticateToken,
     expressMiddleware(apolloServer, {
-      context: async ({ req }) => ({ req }),
+      context: async ({ req, res }) => ({
+        req,
+        res,
+      }),
     })
   );
-})();
 
-// Middleware management
+  // Start the server
+  httpServer.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`🚀 GraphQL endpoint at http://localhost:${PORT}/graphql`);
+  });
+}
+
+// Call the async function to start the server
+startServer().catch(console.error);
+
+// Error handling middleware
 app.use(errorHandler);
-
-// start server
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-  console.log(`GraphQL endpoint available at http://localhost:${PORT}/graphql`);
-});

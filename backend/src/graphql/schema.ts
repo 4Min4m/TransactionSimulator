@@ -1,8 +1,11 @@
-import { gql } from "@apollo/server";
+import { gql } from "graphql-tag";
+import { GraphQLJSON } from "graphql-type-json"; // You'll need to install this
 import { getTransactions } from "../services/supabaseService";
 
-// schema
+// Define schema with JSON scalar type
 export const typeDefs = gql`
+  scalar JSON
+
   type Transaction {
     id: ID!
     card_number: String!
@@ -21,8 +24,9 @@ export const typeDefs = gql`
   }
 `;
 
-//  Resolvers
+// Define resolvers
 export const resolvers = {
+  JSON: GraphQLJSON,
   Query: {
     transactions: async () => {
       const transactions = await getTransactions();

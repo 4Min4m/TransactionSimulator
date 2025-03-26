@@ -3,12 +3,13 @@ import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret";
 
-export const authenticateToken = (req: Request, res: Response, next: NextFunction) => {
+export const authenticateToken = (req: Request, res: Response, next: NextFunction): void => {
   const authHeader = req.headers["authorization"];
   const token = authHeader && authHeader.split(" ")[1]; // Bearer TOKEN
 
   if (!token) {
-    return res.status(401).json({ detail: "Access token required" });
+    res.status(401).json({ detail: "Access token required" });
+    return;
   }
 
   try {
@@ -16,6 +17,6 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
     (req as any).user = user;
     next();
   } catch (error) {
-    return res.status(403).json({ detail: "Invalid token" });
+    res.status(403).json({ detail: "Invalid token" });
   }
 };
