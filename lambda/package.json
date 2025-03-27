@@ -1,0 +1,8 @@
+{
+  "name": "lambda-function",
+  "version": "1.0.0",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.3",
+    "node-fetch": "^2.6.1"
+  }
+}

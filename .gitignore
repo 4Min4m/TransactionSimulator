@@ -1,8 +1,68 @@
-node_modules
+# Node.js & npm
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# TypeScript
+*.tsbuildinfo
+dist/
+**/*.js.map
+**/*.d.ts
+
+# Vite
+.cache/
+.temp/
+*.local
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+terraform.tfstate.lock.info
+.terraform.lock.hcl
+
+# Supabase
+.supabase/
+
+# AWS CLI
+.aws/
+*.zip
+
+# Environment variables
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Build & Output
+build/
+out/
+.next/
+.nuxt/
+
+# Logs
+logs/
+*.log
+
+# Python (اگر هنوز نیاز دارید)
 venv/
 **/__pycache__/
 *.pyc
-.env
-dist/
-frontned/dist
-backend/dist
+*.pyo
+*.pyd

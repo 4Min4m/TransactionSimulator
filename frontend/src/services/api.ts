@@ -1,6 +1,6 @@
 import { TransactionResponse } from "../types/iso8583";
 
-const API_BASE_URL = "https://glorious-space-goldfish-9qw9xv459qj3qqv-8000.app.github.dev";
+const API_BASE_URL = "https://iphs2to8ui.execute-api.us-east-1.amazonaws.com/prod/proxy";
 
 export const processTransaction = async (data: any): Promise<TransactionResponse> => {
   const response = await fetch(`${API_BASE_URL}/api/public/process-transaction`, {

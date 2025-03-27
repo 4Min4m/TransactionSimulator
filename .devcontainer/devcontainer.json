@@ -1,0 +1,7 @@
+{
+    "name": "TransactionSimulator",
+    "image": "mcr.microsoft.com/vscode/devcontainers/javascript-node:18",
+    "features": {
+      "ghcr.io/devcontainers/features/terraform:1": {}
+    }
+  }
