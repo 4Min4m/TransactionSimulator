@@ -1,7 +1,16 @@
 {
-    "name": "TransactionSimulator",
-    "image": "mcr.microsoft.com/vscode/devcontainers/javascript-node:18",
-    "features": {
-      "ghcr.io/devcontainers/features/terraform:1": {}
+  "name": "TransactionSimulator",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:0-18",
+  "customizations": {
+    "vscode": {
+      "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode"]
     }
+  },
+  "postCreateCommand": "npm install",
+  "containerEnv": {
+    "SUPABASE_URL": "${localEnv:SUPABASE_URL}",
+    "SUPABASE_KEY": "${localEnv:SUPABASE_KEY}",
+    "PORT": "8000",
+    "JWT_SECRET": "sQWfzBH1H2iFGRLNyRcn2apc0h2sGHGeWC"
   }
+}

@@ -1,9 +1,6 @@
 import { useEffect, useState } from "react";
 import { CreditCard, PieChart, ArrowDownUp, Clock } from "lucide-react";
-
-interface AdminReportProps {
-  token: string;
-}
+import { getTransactions } from "../services/api";
 
 interface Transaction {
   id: string;
@@ -18,7 +15,7 @@ interface Transaction {
   iso8583_message: any;
 }
 
-export default function AdminReport({ token }: AdminReportProps) {
+export default function AdminReport() {
   const [report, setReport] = useState<{
     totalTransactions: number;
     totalAmount: number;
@@ -35,21 +32,7 @@ export default function AdminReport({ token }: AdminReportProps) {
   useEffect(() => {
     const fetchReport = async () => {
       try {
-        const apiUrl = import.meta.env.VITE_ENV === "production" ? import.meta.env.VITE_API_URL : "";
-        const response = await fetch(`${apiUrl}/api/transactions`, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.detail || "Failed to fetch transactions");
-        }
-
-        const transactions: Transaction[] = await response.json();
+        const transactions: Transaction[] = await getTransactions();
 
         const totalTransactions = transactions.length;
         const totalAmount = transactions.reduce((sum, tx) => sum + tx.amount, 0);
@@ -75,7 +58,7 @@ export default function AdminReport({ token }: AdminReportProps) {
     };
 
     fetchReport();
-  }, [token]);
+  }, []);
 
   if (loading) return (
     <div className="flex justify-center items-center p-8">
@@ -142,7 +125,7 @@ export default function AdminReport({ token }: AdminReportProps) {
       {/* Recent Activity */}
       {report && (
         <div className="bg-white shadow rounded-lg p-4">
-          <h3 className="text-lg font-medium text-gray-800 mb-4">Recent Activity</h3>
+          <h3 className="text-lg font-medium text-gray-800 mb-4">Recent Activity (Last 5 Transactions)</h3>
           <div className="space-y-3">
             {report.recentActivity.map((tx, index) => (
               <div key={index} className="flex items-center justify-between p-2 border-b border-gray-100">

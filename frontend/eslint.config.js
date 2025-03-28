@@ -23,6 +23,7 @@ export default tseslint.config(
         'warn',
         { allowConstantExport: true },
       ],
+      "css/no-unknown-at-rule": "off" // برای Tailwind
     },
   }
 );

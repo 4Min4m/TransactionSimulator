@@ -3,7 +3,7 @@ import { ApolloServer } from "@apollo/server";
 import { expressMiddleware } from "@apollo/server/express4";
 import cors from "cors";
 import bodyParser from "body-parser";
-import dotenv from "dotenv"; // اضافه کردن dotenv
+import dotenv from "dotenv";
 import transactionRoutes from "./routes/transactionRoutes";
 import batchRoutes from "./routes/batchRoutes";
 import authRoutes from "./routes/authRoutes";
@@ -15,24 +15,20 @@ dotenv.config({ path: "./.env" });
 
 const app = express();
 
+// تنظیمات CORS
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "https://*.app.github.dev",
-      "https://transactionsimulator.onrender.com",
-    ],
+    origin: "*",
     methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true,
+    allowedHeaders: ["Content-Type"],
   })
 );
-
+app.options("*", cors());
 app.use(bodyParser.json());
 
 app.use("/api", transactionRoutes);
 app.use("/api", batchRoutes);
-app.use("/api", authRoutes);
+app.use("/api", authRoutes); 
 
 const server = new ApolloServer({
   typeDefs,

@@ -1,30 +1,34 @@
 import { Router, Request, Response, NextFunction } from "express";
-import jwt from "jsonwebtoken";
 
 const router = Router();
-const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret";
 
-const loginHandler = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+// یوزر ادمین تستی
+const TEST_ADMIN = {
+  username: "admin",
+  password: "password123", // پسورد رو تغییر دادم تا مشخص‌تر باشه
+};
+
+router.post("/login", async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { username, password } = req.body;
 
-
-    console.log("Received:", { username, password });
-    
-    // اعتبارسنجی ساده
-    if (username !== "admin" || password !== "password") {
-      res.status(401).json({ detail: "Invalid credentials" });
-      return;
+    // مطمئن شو که فیلدها وجود دارن
+    if (!username || !password) {
+      return res.status(400).json({ success: false, message: "Username and password are required" });
     }
 
-    const user = { id: 1, username: "admin", role: "admin" };
-    const token = jwt.sign(user, JWT_SECRET, { expiresIn: "1h" });
-    res.json({ token });
-  } catch (error) {
+    // چک کردن یوزرنیم و پسورد (غیرحساس به حروف بزرگ و کوچک)
+    if (
+      username.toLowerCase() === TEST_ADMIN.username.toLowerCase() &&
+      password === TEST_ADMIN.password
+    ) {
+      return res.status(200).json({ success: true, message: "Login successful" });
+    }
+
+    return res.status(401).json({ success: false, message: "Invalid credentials" });
+  } catch (error: any) {
     next(error);
   }
-};
-
-router.post("/login", loginHandler);
+});
 
 export default router;

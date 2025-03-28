@@ -4,59 +4,55 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
-const http_1 = __importDefault(require("http"));
+const server_1 = require("@apollo/server");
+const express4_1 = require("@apollo/server/express4");
+const cors_1 = __importDefault(require("cors"));
+const body_parser_1 = __importDefault(require("body-parser"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const transactionRoutes_1 = __importDefault(require("./routes/transactionRoutes"));
 const batchRoutes_1 = __importDefault(require("./routes/batchRoutes"));
 const authRoutes_1 = __importDefault(require("./routes/authRoutes"));
 const errorHandler_1 = require("./middleware/errorHandler");
-const auth_1 = require("./middleware/auth");
-const server_1 = require("@apollo/server");
-const express4_1 = require("@apollo/server/express4");
 const schema_1 = require("./graphql/schema");
-const body_parser_1 = require("body-parser");
+// لود متغیرهای محیطی
 dotenv_1.default.config({ path: "./.env" });
-console.log("FRONTEND_URL:", process.env.FRONTEND_URL);
+console.log("Env vars:", {
+    PORT: process.env.PORT,
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_KEY: process.env.SUPABASE_KEY,
+});
 const app = (0, express_1.default)();
-const PORT = process.env.PORT || 8000;
-// تنظیم CORS
-app.use((req, res, next) => {
-    const origin = req.headers.origin;
-    if (origin === process.env.FRONTEND_URL || origin === "http://localhost:5173") {
-        res.header("Access-Control-Allow-Origin", origin);
-    }
-    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    res.header("Access-Control-Allow-Credentials", "true");
-    if (req.method === "OPTIONS") {
-        return res.status(200).end();
-    }
-    next();
-});
-app.use(express_1.default.json());
-app.get("/", (req, res) => {
-    res.json({ message: "Welcome to the Payment Simulator API!" });
-});
-app.use("/api", authRoutes_1.default);
+app.use((0, cors_1.default)({
+    origin: (origin, callback) => {
+        const allowedOrigins = ["*"];
+        if (!origin || allowedOrigins.includes(origin) || origin.includes(".app.github.dev")) {
+            callback(null, true);
+        }
+        else {
+            callback(new Error("Not allowed by CORS"));
+        }
+    },
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+}));
+app.options("*", (0, cors_1.default)()); // برای Preflight
+app.use(body_parser_1.default.json());
 app.use("/api", transactionRoutes_1.default);
 app.use("/api", batchRoutes_1.default);
-const apolloServer = new server_1.ApolloServer({
+app.use("/api", authRoutes_1.default);
+const server = new server_1.ApolloServer({
     typeDefs: schema_1.typeDefs,
     resolvers: schema_1.resolvers,
 });
 async function startServer() {
-    const httpServer = http_1.default.createServer(app);
-    await apolloServer.start();
-    app.use("/graphql", (0, body_parser_1.json)(), auth_1.authenticateToken, (0, express4_1.expressMiddleware)(apolloServer, {
-        context: async ({ req, res }) => ({
-            req,
-            res,
-        }),
-    }));
-    httpServer.listen(PORT, () => {
-        console.log(`🚀 Server running on port ${PORT}`);
-        console.log(`🚀 GraphQL endpoint at http://localhost:${PORT}/graphql`);
+    await server.start();
+    app.use("/graphql", (0, express4_1.expressMiddleware)(server));
+    app.use(errorHandler_1.errorHandler);
+    const PORT = process.env.PORT || 8000;
+    app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+        console.log(`GraphQL endpoint: http://localhost:${PORT}/graphql`);
     });
 }
-startServer().catch(console.error);
-app.use(errorHandler_1.errorHandler);
+startServer();

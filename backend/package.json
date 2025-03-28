@@ -21,13 +21,11 @@
     "express": "^4.18.2",
     "graphql": "^16.10.0",
     "graphql-tag": "^2.12.6",
-    "graphql-type-json": "^0.3.2",
-    "jsonwebtoken": "^9.0.2"
+    "graphql-type-json": "^0.3.2"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
     "@types/graphql": "^14.2.3",
-    "@types/jsonwebtoken": "^9.0.9",
     "@types/node": "^22.13.13",
     "nodemon": "^3.1.9",
     "ts-node": "^10.9.2",

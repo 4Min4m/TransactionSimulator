@@ -23,7 +23,7 @@ export const processTransaction = async (transaction: TransactionRequest): Promi
   // simulating delay
   await new Promise((resolve) => setTimeout(resolve, Math.random() * 900 + 100));
 
-  // aprrove logic
+  // approve logic
   const isApproved = Math.random() < 0.9; // 90% success
   const responseCode = isApproved ? "00" : "05";
   const authorizationCode = isApproved

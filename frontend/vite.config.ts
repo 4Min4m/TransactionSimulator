@@ -6,13 +6,12 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": {
-        target: "http://localhost:8000",
+        target: process.env.VITE_API_URL || "https://glorious-space-goldfish-9qw9xv459qj3qqv-8000.app.github.dev",
         changeOrigin: true,
         secure: false,
-        rewrite: (path) => path.replace(/^\/api/, "/api"),
       },
     },
-    host: "0.0.0.0", // برای Codespace
+    host: "0.0.0.0",
     port: 5173,
   },
 });

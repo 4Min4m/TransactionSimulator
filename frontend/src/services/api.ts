@@ -1,9 +1,9 @@
 import { TransactionResponse } from "../types/iso8583";
 
-const API_BASE_URL = "https://iphs2to8ui.execute-api.us-east-1.amazonaws.com/prod/proxy";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
 export const processTransaction = async (data: any): Promise<TransactionResponse> => {
-  const response = await fetch(`${API_BASE_URL}/api/public/process-transaction`, {
+  const response = await fetch(`${API_BASE_URL}/public/process-transaction`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -12,49 +12,38 @@ export const processTransaction = async (data: any): Promise<TransactionResponse
   });
   if (!response.ok) {
     const errorData = await response.json();
-    console.error("Validation errors:", errorData);
     throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
   }
   return response.json();
 };
 
 export const processBatch = async (data: any): Promise<any> => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/public/process-batch`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(data),
-    });
+  const response = await fetch(`${API_BASE_URL}/public/process-batch`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(data),
+  });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error("Validation errors:", errorData);
-      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error("Error processing batch:", error);
-    throw error;
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
   }
+
+  return response.json();
 };
 
 export const getTransactions = async (): Promise<any[]> => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/public/transactions`, {
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
-    }
-    return await response.json();
-  } catch (error) {
-    console.error("Error fetching transactions:", error);
-    throw error;
+  const response = await fetch(`${API_BASE_URL}/public/transactions`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
   }
+  return response.json();
 };

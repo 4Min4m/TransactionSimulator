@@ -13,7 +13,7 @@ export default function TransactionChart() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const transactions = await getTransactions(); // توکن حذف شده
+        const transactions = await getTransactions();
         const successCount = transactions.filter((tx: any) => tx.status === "APPROVED").length;
         const failureCount = transactions.filter((tx: any) => tx.status === "DECLINED").length;
 
@@ -27,9 +27,8 @@ export default function TransactionChart() {
             },
           ],
         });
-      } catch (error) {
-        console.error("Error fetching transactions for chart:", error);
-        setError("Failed to fetch transactions");
+      } catch (err: any) {
+        setError(err.message || "Failed to fetch transactions");
       } finally {
         setLoading(false);
       }
@@ -42,7 +41,7 @@ export default function TransactionChart() {
   if (error) return <p className="text-red-600">{error}</p>;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 mt-6">
       <h3 className="text-lg font-medium text-gray-900">Transaction Statistics</h3>
       <div className="bg-gray-50 p-4 rounded-md">
         {chartData && (

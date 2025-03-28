@@ -1,11 +1,10 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { processBatch } from "../services/batchService";
-import { authenticateToken } from "../middleware/auth";
 
 const router = Router();
 
 // مسیر محافظت‌شده
-router.post("/process-batch", authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+router.post("/process-batch", async (req: Request, res: Response, next: NextFunction) => {
   try {
     const batch = req.body;
     const response = await processBatch(batch);
