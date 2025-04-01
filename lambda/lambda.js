@@ -7,7 +7,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 exports.handler = async (event) => {
   const headers = {
     "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*", // Allow All
+    "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   };
@@ -24,28 +24,57 @@ exports.handler = async (event) => {
     };
   }
 
-  if (path === "/api/public/process-transaction" && httpMethod === "POST") {
-    const data = JSON.parse(body);
-    const response = {
-      success: Math.random() > 0.2,
-      message: "Transaction processed",
-      data: { ...data, responseCode: "00" },
-    };
-    await supabase.from("transactions").insert([data]);
+  if (path === "/login" && httpMethod === "POST") {
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify(response),
+      body: JSON.stringify({ message: "Login successful" }),
     };
   }
 
+  // اصلاح مسیرها برای تطابق با API Gateway
+  if (path === "/api/public/process-transaction" && httpMethod === "POST") {
+    try {
+      const data = JSON.parse(body);
+      const response = {
+        success: Math.random() > 0.2,
+        message: "Transaction processed",
+        data: { ...data, responseCode: "00" },
+      };
+      const { error } = await supabase.from("transactions").insert([data]);
+      if (error) throw error;
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify(response),
+      };
+    } catch (error) {
+      console.error("Error in process-transaction:", error);
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ detail: "Invalid request body or database error" }),
+      };
+    }
+  }
+
   if (path === "/api/public/transactions" && httpMethod === "GET") {
-    const { data } = await supabase.from("transactions").select("*").limit(10);
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify(data),
-    };
+    try {
+      const { data, error } = await supabase.from("transactions").select("*").limit(10);
+      if (error) throw error;
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify(data),
+      };
+    } catch (error) {
+      console.error("Error fetching transactions:", error);
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ detail: "Error fetching transactions" }),
+      };
+    }
   }
 
   return {

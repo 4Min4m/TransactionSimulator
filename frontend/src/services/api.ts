@@ -1,6 +1,20 @@
 import { TransactionResponse } from "../types/iso8583";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
+const API_BASE_URL = "https://l52qftihwf.execute-api.us-east-1.amazonaws.com/prod/proxy";
+
+interface LoginCredentials {
+  username: string;
+  password: string;
+}
+
+export const login = async (credentials: LoginCredentials) => {
+  const response = await fetch(`${API_BASE_URL}/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(credentials),
+  });
+  return response.json();
+};
 
 export const processTransaction = async (data: any): Promise<TransactionResponse> => {
   const response = await fetch(`${API_BASE_URL}/public/process-transaction`, {

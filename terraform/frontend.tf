@@ -28,7 +28,6 @@ resource "aws_s3_bucket_policy" "frontend_policy" {
       }
     ]
   })
-  # مطمئن شو که سیاست بعد از غیرفعال کردن Block Public Access اعمال بشه
   depends_on = [aws_s3_bucket_public_access_block.frontend_public_access]
 }
 
@@ -53,11 +52,7 @@ resource "random_string" "suffix" {
   upper   = false
 }
 
-# خروجی دامنه باکت
-output "frontend_url" {
-  value = aws_s3_bucket.frontend_bucket.bucket_regional_domain_name
-}
-
+# تنظیمات وب‌سایت
 resource "aws_s3_bucket_website_configuration" "frontend_website" {
   bucket = aws_s3_bucket.frontend_bucket.id
   index_document {
@@ -67,6 +62,19 @@ resource "aws_s3_bucket_website_configuration" "frontend_website" {
     key = "index.html"  # برای SPA مثل React
   }
 }
+
+# تنظیمات CORS برای S3
+resource "aws_s3_bucket_cors_configuration" "frontend_cors" {
+  bucket = aws_s3_bucket.frontend_bucket.id
+  cors_rule {
+    allowed_headers = ["*"]
+    allowed_methods = ["GET", "HEAD"]
+    allowed_origins = ["*"]
+    max_age_seconds = 3000
+  }
+}
+
+# خروجی‌ها
 output "website_url" {
   value = "http://${aws_s3_bucket.frontend_bucket.bucket}.s3-website-us-east-1.amazonaws.com"
 }

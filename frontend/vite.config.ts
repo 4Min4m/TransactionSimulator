@@ -6,7 +6,7 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": {
-        target: process.env.VITE_API_URL || "https://glorious-space-goldfish-9qw9xv459qj3qqv-8000.app.github.dev",
+        target: process.env.VITE_API_URL || "https://l52qftihwf.execute-api.us-east-1.amazonaws.com/prod/proxy",
         changeOrigin: true,
         secure: false,
       },
