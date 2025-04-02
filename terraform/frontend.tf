@@ -68,7 +68,7 @@ resource "aws_s3_bucket_cors_configuration" "frontend_cors" {
   bucket = aws_s3_bucket.frontend_bucket.id
   cors_rule {
     allowed_headers = ["*"]
-    allowed_methods = ["GET", "HEAD"]
+    allowed_methods = ["GET", "HEAD","PUT","DELETE"]
     allowed_origins = ["*"]
     max_age_seconds = 3000
   }

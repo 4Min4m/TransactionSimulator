@@ -24,16 +24,24 @@ exports.handler = async (event) => {
     };
   }
 
-  if (path === "/login" && httpMethod === "POST") {
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({ message: "Login successful" }),
-    };
+  if (path === "/api/login" && httpMethod === "POST") {
+    try {
+      const { username, password } = JSON.parse(body);
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ message: "Login successful", username }),
+      };
+    } catch (error) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ detail: "Invalid login credentials" }),
+      };
+    }
   }
 
-  // اصلاح مسیرها برای تطابق با API Gateway
-  if (path === "/api/public/process-transaction" && httpMethod === "POST") {
+  if (path === "/api/transactions" && httpMethod === "POST") {
     try {
       const data = JSON.parse(body);
       const response = {
@@ -58,7 +66,7 @@ exports.handler = async (event) => {
     }
   }
 
-  if (path === "/api/public/transactions" && httpMethod === "GET") {
+  if (path === "/api/transactions" && httpMethod === "GET") {
     try {
       const { data, error } = await supabase.from("transactions").select("*").limit(10);
       if (error) throw error;
