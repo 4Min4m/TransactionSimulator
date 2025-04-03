@@ -20,7 +20,7 @@ export default function BatchForm() {
         total_amount,
         duration_seconds,
         merchant_id,
-      }); // توکن حذف شده
+      });
       setResult(response);
     } catch (error) {
       console.error("Error processing batch:", error);

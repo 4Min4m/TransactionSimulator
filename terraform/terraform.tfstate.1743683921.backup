@@ -1,0 +1,1038 @@
+{
+  "version": 4,
+  "terraform_version": "1.6.0",
+  "serial": 258,
+  "lineage": "32330f91-e915-afaf-1df3-c4906109d40e",
+  "outputs": {
+    "api_url": {
+      "value": "https://vecgjrouma.execute-api.us-east-1.amazonaws.com/prod/api",
+      "type": "string"
+    },
+    "website_url": {
+      "value": "http://transaction-simulator-frontend-roolpho0.s3-website-us-east-1.amazonaws.com",
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "mode": "data",
+      "type": "archive_file",
+      "name": "lambda_zip",
+      "provider": "provider[\"registry.terraform.io/hashicorp/archive\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "exclude_symlink_directories": null,
+            "excludes": null,
+            "id": "2e331f3461be4ad5eb458603e1daae057d98f08c",
+            "output_base64sha256": "5UIpvJTQBK9v/PbZ+uYv/BwIZgVnFooiS7FJ/jUVCX8=",
+            "output_base64sha512": "fVLDQzu1zWwewxORTSsCPfJTSk+sABhcf2IGNmicV09/3Jmo7wCKlX9Y/ch3ujyFxvJedSkJZrgJNssGAWVcGw==",
+            "output_file_mode": null,
+            "output_md5": "96bccd43cb84aa8c63fb22ecd7ead9f3",
+            "output_path": "lambda.zip",
+            "output_sha": "2e331f3461be4ad5eb458603e1daae057d98f08c",
+            "output_sha256": "e54229bc94d004af6ffcf6d9fae62ffc1c08660567168a224bb149fe3515097f",
+            "output_sha512": "7d52c3433bb5cd6c1ec313914d2b023df2534a4fac00185c7f620636689c574f7fdc99a8ef008a957f58fdc877ba3c85c6f25e75290966b80936cb0601655c1b",
+            "output_size": 3124464,
+            "source": [],
+            "source_content": null,
+            "source_content_filename": null,
+            "source_dir": "../lambda",
+            "source_file": null,
+            "type": "zip"
+          },
+          "sensitive_attributes": []
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_api_gateway_deployment",
+      "name": "api_deployment",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "canary_settings": [],
+            "created_date": "2025-04-02T15:41:25Z",
+            "description": "",
+            "execution_arn": "arn:aws:execute-api:us-east-1:864981715490:vecgjrouma/",
+            "id": "ywxikm",
+            "invoke_url": "https://vecgjrouma.execute-api.us-east-1.amazonaws.com/",
+            "rest_api_id": "vecgjrouma",
+            "stage_description": null,
+            "stage_name": null,
+            "triggers": null,
+            "variables": null
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "aws_api_gateway_integration.lambda_integration_login",
+            "aws_api_gateway_integration.lambda_integration_login_options",
+            "aws_api_gateway_integration.lambda_integration_login_post",
+            "aws_api_gateway_integration.lambda_integration_transactions",
+            "aws_api_gateway_integration.lambda_integration_transactions_get",
+            "aws_api_gateway_integration.lambda_integration_transactions_options",
+            "aws_api_gateway_integration.lambda_integration_transactions_post",
+            "aws_api_gateway_integration_response.login_options_response",
+            "aws_api_gateway_integration_response.transactions_options_response",
+            "aws_api_gateway_method.api_login_any",
+            "aws_api_gateway_method.api_login_options",
+            "aws_api_gateway_method.api_login_post",
+            "aws_api_gateway_method.api_transactions_any",
+            "aws_api_gateway_method.api_transactions_get",
+            "aws_api_gateway_method.api_transactions_options",
+            "aws_api_gateway_method.api_transactions_post",
+            "aws_api_gateway_method_response.login_options_200",
+            "aws_api_gateway_method_response.transactions_options_200",
+            "aws_api_gateway_resource.api_login",
+            "aws_api_gateway_resource.api_root",
+            "aws_api_gateway_resource.api_transactions",
+            "aws_api_gateway_rest_api.api",
+            "aws_iam_role.lambda_role",
+            "aws_lambda_function.api_lambda",
+            "data.archive_file.lambda_zip"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_api_gateway_integration",
+      "name": "lambda_integration_login",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "cache_key_parameters": [],
+            "cache_namespace": "1av6eg",
+            "connection_id": "",
+            "connection_type": "INTERNET",
+            "content_handling": "",
+            "credentials": "",
+            "http_method": "ANY",
+            "id": "agi-vecgjrouma-1av6eg-ANY",
+            "integration_http_method": "POST",
+            "passthrough_behavior": "WHEN_NO_MATCH",
+            "request_parameters": {},
+            "request_templates": {},
+            "resource_id": "1av6eg",
+            "rest_api_id": "vecgjrouma",
+            "timeout_milliseconds": 29000,
+            "tls_config": [],
+            "type": "AWS_PROXY",
+            "uri": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:864981715490:function:TransactionSimulatorAPI/invocations"
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "aws_api_gateway_method.api_login_any",
+            "aws_api_gateway_resource.api_login",
+            "aws_api_gateway_resource.api_root",
+            "aws_api_gateway_rest_api.api",
+            "aws_iam_role.lambda_role",
+            "aws_lambda_function.api_lambda",
+            "data.archive_file.lambda_zip"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_api_gateway_integration",
+      "name": "lambda_integration_transactions",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "cache_key_parameters": [],
+            "cache_namespace": "03p1bw",
+            "connection_id": "",
+            "connection_type": "INTERNET",
+            "content_handling": "",
+            "credentials": "",
+            "http_method": "ANY",
+            "id": "agi-vecgjrouma-03p1bw-ANY",
+            "integration_http_method": "POST",
+            "passthrough_behavior": "WHEN_NO_MATCH",
+            "request_parameters": {},
+            "request_templates": {},
+            "resource_id": "03p1bw",
+            "rest_api_id": "vecgjrouma",
+            "timeout_milliseconds": 29000,
+            "tls_config": [],
+            "type": "AWS_PROXY",
+            "uri": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:864981715490:function:TransactionSimulatorAPI/invocations"
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "aws_api_gateway_method.api_transactions_any",
+            "aws_api_gateway_resource.api_root",
+            "aws_api_gateway_resource.api_transactions",
+            "aws_api_gateway_rest_api.api",
+            "aws_iam_role.lambda_role",
+            "aws_lambda_function.api_lambda",
+            "data.archive_file.lambda_zip"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_api_gateway_method",
+      "name": "api_login_any",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "api_key_required": false,
+            "authorization": "NONE",
+            "authorization_scopes": [],
+            "authorizer_id": "",
+            "http_method": "ANY",
+            "id": "agm-vecgjrouma-1av6eg-ANY",
+            "operation_name": "",
+            "request_models": {},
+            "request_parameters": {},
+            "request_validator_id": "",
+            "resource_id": "1av6eg",
+            "rest_api_id": "vecgjrouma"
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "aws_api_gateway_resource.api_login",
+            "aws_api_gateway_resource.api_root",
+            "aws_api_gateway_rest_api.api"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_api_gateway_method",
+      "name": "api_login_options",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": []
+    },
+    {
+      "mode": "managed",
+      "type": "aws_api_gateway_method",
+      "name": "api_login_post",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": []
+    },
+    {
+      "mode": "managed",
+      "type": "aws_api_gateway_method",
+      "name": "api_transactions_any",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "api_key_required": false,
+            "authorization": "NONE",
+            "authorization_scopes": [],
+            "authorizer_id": "",
+            "http_method": "ANY",
+            "id": "agm-vecgjrouma-03p1bw-ANY",
+            "operation_name": "",
+            "request_models": {},
+            "request_parameters": {},
+            "request_validator_id": "",
+            "resource_id": "03p1bw",
+            "rest_api_id": "vecgjrouma"
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "aws_api_gateway_resource.api_root",
+            "aws_api_gateway_resource.api_transactions",
+            "aws_api_gateway_rest_api.api"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_api_gateway_method",
+      "name": "api_transactions_get",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": []
+    },
+    {
+      "mode": "managed",
+      "type": "aws_api_gateway_method",
+      "name": "api_transactions_options",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": []
+    },
+    {
+      "mode": "managed",
+      "type": "aws_api_gateway_method",
+      "name": "api_transactions_post",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": []
+    },
+    {
+      "mode": "managed",
+      "type": "aws_api_gateway_resource",
+      "name": "api_login",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "id": "1av6eg",
+            "parent_id": "trfz2z",
+            "path": "/api/login",
+            "path_part": "login",
+            "rest_api_id": "vecgjrouma"
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "aws_api_gateway_resource.api_root",
+            "aws_api_gateway_rest_api.api"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_api_gateway_resource",
+      "name": "api_root",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "id": "trfz2z",
+            "parent_id": "nz1w54seze",
+            "path": "/api",
+            "path_part": "api",
+            "rest_api_id": "vecgjrouma"
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "aws_api_gateway_rest_api.api"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_api_gateway_resource",
+      "name": "api_transactions",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "id": "03p1bw",
+            "parent_id": "trfz2z",
+            "path": "/api/transactions",
+            "path_part": "transactions",
+            "rest_api_id": "vecgjrouma"
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "aws_api_gateway_resource.api_root",
+            "aws_api_gateway_rest_api.api"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_api_gateway_rest_api",
+      "name": "api",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "api_key_source": "HEADER",
+            "arn": "arn:aws:apigateway:us-east-1::/restapis/vecgjrouma",
+            "binary_media_types": [],
+            "body": null,
+            "created_date": "2025-04-02T15:41:10Z",
+            "description": "",
+            "disable_execute_api_endpoint": false,
+            "endpoint_configuration": [
+              {
+                "types": [
+                  "EDGE"
+                ],
+                "vpc_endpoint_ids": []
+              }
+            ],
+            "execution_arn": "arn:aws:execute-api:us-east-1:864981715490:vecgjrouma",
+            "fail_on_warnings": null,
+            "id": "vecgjrouma",
+            "minimum_compression_size": "",
+            "name": "TransactionSimulatorAPI",
+            "parameters": null,
+            "policy": "",
+            "put_rest_api_mode": null,
+            "root_resource_id": "nz1w54seze",
+            "tags": {},
+            "tags_all": {}
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA=="
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_api_gateway_stage",
+      "name": "prod_stage",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "access_log_settings": [],
+            "arn": "arn:aws:apigateway:us-east-1::/restapis/vecgjrouma/stages/prod",
+            "cache_cluster_enabled": false,
+            "cache_cluster_size": "",
+            "canary_settings": [],
+            "client_certificate_id": "",
+            "deployment_id": "ywxikm",
+            "description": "",
+            "documentation_version": "",
+            "execution_arn": "arn:aws:execute-api:us-east-1:864981715490:vecgjrouma/prod",
+            "id": "ags-vecgjrouma-prod",
+            "invoke_url": "https://vecgjrouma.execute-api.us-east-1.amazonaws.com/prod",
+            "rest_api_id": "vecgjrouma",
+            "stage_name": "prod",
+            "tags": {},
+            "tags_all": {},
+            "variables": {},
+            "web_acl_arn": "",
+            "xray_tracing_enabled": false
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "aws_api_gateway_deployment.api_deployment",
+            "aws_api_gateway_integration.lambda_integration_login",
+            "aws_api_gateway_integration.lambda_integration_login_options",
+            "aws_api_gateway_integration.lambda_integration_login_post",
+            "aws_api_gateway_integration.lambda_integration_transactions",
+            "aws_api_gateway_integration.lambda_integration_transactions_get",
+            "aws_api_gateway_integration.lambda_integration_transactions_options",
+            "aws_api_gateway_integration.lambda_integration_transactions_post",
+            "aws_api_gateway_integration_response.login_options_response",
+            "aws_api_gateway_integration_response.transactions_options_response",
+            "aws_api_gateway_method.api_login_any",
+            "aws_api_gateway_method.api_login_options",
+            "aws_api_gateway_method.api_login_post",
+            "aws_api_gateway_method.api_transactions_any",
+            "aws_api_gateway_method.api_transactions_get",
+            "aws_api_gateway_method.api_transactions_options",
+            "aws_api_gateway_method.api_transactions_post",
+            "aws_api_gateway_method_response.login_options_200",
+            "aws_api_gateway_method_response.transactions_options_200",
+            "aws_api_gateway_resource.api_login",
+            "aws_api_gateway_resource.api_root",
+            "aws_api_gateway_resource.api_transactions",
+            "aws_api_gateway_rest_api.api",
+            "aws_iam_role.lambda_role",
+            "aws_lambda_function.api_lambda",
+            "data.archive_file.lambda_zip"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_iam_role",
+      "name": "lambda_role",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "arn": "arn:aws:iam::864981715490:role/lambda_role",
+            "assume_role_policy": "{\"Statement\":[{\"Action\":\"sts:AssumeRole\",\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"lambda.amazonaws.com\"}}],\"Version\":\"2012-10-17\"}",
+            "create_date": "2025-04-02T15:41:09Z",
+            "description": "",
+            "force_detach_policies": false,
+            "id": "lambda_role",
+            "inline_policy": [],
+            "managed_policy_arns": [
+              "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+            ],
+            "max_session_duration": 3600,
+            "name": "lambda_role",
+            "name_prefix": "",
+            "path": "/",
+            "permissions_boundary": "",
+            "tags": {},
+            "tags_all": {},
+            "unique_id": "AROA4SZHNRIRHMO4PN7RS"
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA=="
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_iam_role_policy_attachment",
+      "name": "lambda_policy",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "id": "lambda_role-20250402154110469600000001",
+            "policy_arn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+            "role": "lambda_role"
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "aws_iam_role.lambda_role"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_lambda_function",
+      "name": "api_lambda",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "architectures": [
+              "x86_64"
+            ],
+            "arn": "arn:aws:lambda:us-east-1:864981715490:function:TransactionSimulatorAPI",
+            "code_sha256": "lbT8leHClcdFssk9IFOXEyCm3NAby/9XQuvA21CovTE=",
+            "code_signing_config_arn": "",
+            "dead_letter_config": [],
+            "description": "",
+            "environment": [
+              {
+                "variables": {
+                  "SUPABASE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNia3ZqZGRhZmFrcG55d3Rod21jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzcyOTE0MDgsImV4cCI6MjA1Mjg2NzQwOH0.fjPb_ZsNsp-_vf-wObGtr4R4gXL6lgzJTP2seKY_n4I",
+                  "SUPABASE_URL": "https://cbkvjddafakpnywthwmc.supabase.co"
+                }
+              }
+            ],
+            "ephemeral_storage": [
+              {
+                "size": 512
+              }
+            ],
+            "file_system_config": [],
+            "filename": "lambda.zip",
+            "function_name": "TransactionSimulatorAPI",
+            "handler": "lambda.handler",
+            "id": "TransactionSimulatorAPI",
+            "image_config": [],
+            "image_uri": "",
+            "invoke_arn": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:864981715490:function:TransactionSimulatorAPI/invocations",
+            "kms_key_arn": "",
+            "last_modified": "2025-04-03T12:20:18.000+0000",
+            "layers": [],
+            "logging_config": [
+              {
+                "application_log_level": "",
+                "log_format": "Text",
+                "log_group": "/aws/lambda/TransactionSimulatorAPI",
+                "system_log_level": ""
+              }
+            ],
+            "memory_size": 128,
+            "package_type": "Zip",
+            "publish": false,
+            "qualified_arn": "arn:aws:lambda:us-east-1:864981715490:function:TransactionSimulatorAPI:$LATEST",
+            "qualified_invoke_arn": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:864981715490:function:TransactionSimulatorAPI:$LATEST/invocations",
+            "replace_security_groups_on_destroy": null,
+            "replacement_security_group_ids": null,
+            "reserved_concurrent_executions": -1,
+            "role": "arn:aws:iam::864981715490:role/lambda_role",
+            "runtime": "nodejs18.x",
+            "s3_bucket": null,
+            "s3_key": null,
+            "s3_object_version": null,
+            "signing_job_arn": "",
+            "signing_profile_version_arn": "",
+            "skip_destroy": false,
+            "snap_start": [],
+            "source_code_hash": "lbT8leHClcdFssk9IFOXEyCm3NAby/9XQuvA21CovTE=",
+            "source_code_size": 3124011,
+            "tags": {},
+            "tags_all": {},
+            "timeout": 3,
+            "timeouts": null,
+            "tracing_config": [
+              {
+                "mode": "PassThrough"
+              }
+            ],
+            "version": "$LATEST",
+            "vpc_config": []
+          },
+          "sensitive_attributes": [],
+          "private": "eyJlMmJmYjczMC1lY2FhLTExZTYtOGY4OC0zNDM2M2JjN2M0YzAiOnsiY3JlYXRlIjo2MDAwMDAwMDAwMDAsImRlbGV0ZSI6NjAwMDAwMDAwMDAwLCJ1cGRhdGUiOjYwMDAwMDAwMDAwMH19",
+          "dependencies": [
+            "aws_iam_role.lambda_role",
+            "data.archive_file.lambda_zip"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_lambda_permission",
+      "name": "api_gateway",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "action": "lambda:InvokeFunction",
+            "event_source_token": null,
+            "function_name": "TransactionSimulatorAPI",
+            "function_url_auth_type": null,
+            "id": "AllowAPIGatewayInvoke",
+            "principal": "apigateway.amazonaws.com",
+            "principal_org_id": null,
+            "qualifier": "",
+            "source_account": null,
+            "source_arn": "arn:aws:execute-api:us-east-1:864981715490:vecgjrouma/*/*",
+            "statement_id": "AllowAPIGatewayInvoke",
+            "statement_id_prefix": ""
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "aws_api_gateway_rest_api.api",
+            "aws_iam_role.lambda_role",
+            "aws_lambda_function.api_lambda",
+            "data.archive_file.lambda_zip"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "frontend_bucket",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "acceleration_status": "",
+            "acl": null,
+            "arn": "arn:aws:s3:::transaction-simulator-frontend-roolpho0",
+            "bucket": "transaction-simulator-frontend-roolpho0",
+            "bucket_domain_name": "transaction-simulator-frontend-roolpho0.s3.amazonaws.com",
+            "bucket_prefix": "",
+            "bucket_regional_domain_name": "transaction-simulator-frontend-roolpho0.s3.us-east-1.amazonaws.com",
+            "cors_rule": [
+              {
+                "allowed_headers": [
+                  "*"
+                ],
+                "allowed_methods": [
+                  "GET",
+                  "HEAD",
+                  "DELETE",
+                  "PUT"
+                ],
+                "allowed_origins": [
+                  "*"
+                ],
+                "expose_headers": [],
+                "max_age_seconds": 3000
+              }
+            ],
+            "force_destroy": true,
+            "grant": [
+              {
+                "id": "ae2033b5f5647f8bcd98c400fe0b484953a6ef7cba0604647c4ac147efb152bd",
+                "permissions": [
+                  "FULL_CONTROL"
+                ],
+                "type": "CanonicalUser",
+                "uri": ""
+              }
+            ],
+            "hosted_zone_id": "Z3AQBSTGFYJSTF",
+            "id": "transaction-simulator-frontend-roolpho0",
+            "lifecycle_rule": [],
+            "logging": [],
+            "object_lock_configuration": [],
+            "object_lock_enabled": false,
+            "policy": "{\"Statement\":[{\"Action\":\"s3:GetObject\",\"Effect\":\"Allow\",\"Principal\":\"*\",\"Resource\":\"arn:aws:s3:::transaction-simulator-frontend-roolpho0/*\",\"Sid\":\"PublicReadGetObject\"}],\"Version\":\"2012-10-17\"}",
+            "region": "us-east-1",
+            "replication_configuration": [],
+            "request_payer": "BucketOwner",
+            "server_side_encryption_configuration": [
+              {
+                "rule": [
+                  {
+                    "apply_server_side_encryption_by_default": [
+                      {
+                        "kms_master_key_id": "",
+                        "sse_algorithm": "AES256"
+                      }
+                    ],
+                    "bucket_key_enabled": false
+                  }
+                ]
+              }
+            ],
+            "tags": {},
+            "tags_all": {},
+            "timeouts": null,
+            "versioning": [
+              {
+                "enabled": false,
+                "mfa_delete": false
+              }
+            ],
+            "website": [
+              {
+                "error_document": "index.html",
+                "index_document": "index.html",
+                "redirect_all_requests_to": "",
+                "routing_rules": ""
+              }
+            ],
+            "website_domain": "s3-website-us-east-1.amazonaws.com",
+            "website_endpoint": "transaction-simulator-frontend-roolpho0.s3-website-us-east-1.amazonaws.com"
+          },
+          "sensitive_attributes": [],
+          "private": "eyJlMmJmYjczMC1lY2FhLTExZTYtOGY4OC0zNDM2M2JjN2M0YzAiOnsiY3JlYXRlIjoxMjAwMDAwMDAwMDAwLCJkZWxldGUiOjM2MDAwMDAwMDAwMDAsInJlYWQiOjEyMDAwMDAwMDAwMDAsInVwZGF0ZSI6MTIwMDAwMDAwMDAwMH19",
+          "dependencies": [
+            "random_string.suffix"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_s3_bucket_cors_configuration",
+      "name": "frontend_cors",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "bucket": "transaction-simulator-frontend-roolpho0",
+            "cors_rule": [
+              {
+                "allowed_headers": [
+                  "*"
+                ],
+                "allowed_methods": [
+                  "DELETE",
+                  "GET",
+                  "HEAD",
+                  "PUT"
+                ],
+                "allowed_origins": [
+                  "*"
+                ],
+                "expose_headers": [],
+                "id": "",
+                "max_age_seconds": 3000
+              }
+            ],
+            "expected_bucket_owner": "",
+            "id": "transaction-simulator-frontend-roolpho0"
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "aws_s3_bucket.frontend_bucket",
+            "random_string.suffix"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_s3_bucket_policy",
+      "name": "frontend_policy",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "bucket": "transaction-simulator-frontend-roolpho0",
+            "id": "transaction-simulator-frontend-roolpho0",
+            "policy": "{\"Statement\":[{\"Action\":\"s3:GetObject\",\"Effect\":\"Allow\",\"Principal\":\"*\",\"Resource\":\"arn:aws:s3:::transaction-simulator-frontend-roolpho0/*\",\"Sid\":\"PublicReadGetObject\"}],\"Version\":\"2012-10-17\"}"
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "aws_s3_bucket.frontend_bucket",
+            "aws_s3_bucket_public_access_block.frontend_public_access",
+            "random_string.suffix"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_s3_bucket_public_access_block",
+      "name": "frontend_public_access",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "block_public_acls": false,
+            "block_public_policy": false,
+            "bucket": "transaction-simulator-frontend-roolpho0",
+            "id": "transaction-simulator-frontend-roolpho0",
+            "ignore_public_acls": false,
+            "restrict_public_buckets": false
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "aws_s3_bucket.frontend_bucket",
+            "random_string.suffix"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_s3_bucket_website_configuration",
+      "name": "frontend_website",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "bucket": "transaction-simulator-frontend-roolpho0",
+            "error_document": [
+              {
+                "key": "index.html"
+              }
+            ],
+            "expected_bucket_owner": "",
+            "id": "transaction-simulator-frontend-roolpho0",
+            "index_document": [
+              {
+                "suffix": "index.html"
+              }
+            ],
+            "redirect_all_requests_to": [],
+            "routing_rule": [],
+            "routing_rules": "",
+            "website_domain": "s3-website-us-east-1.amazonaws.com",
+            "website_endpoint": "transaction-simulator-frontend-roolpho0.s3-website-us-east-1.amazonaws.com"
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "aws_s3_bucket.frontend_bucket",
+            "random_string.suffix"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_s3_object",
+      "name": "frontend_files",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "index_key": "assets/index-BHYqiF2P.css",
+          "schema_version": 0,
+          "attributes": {
+            "acl": null,
+            "arn": "arn:aws:s3:::transaction-simulator-frontend-roolpho0/assets/index-BHYqiF2P.css",
+            "bucket": "transaction-simulator-frontend-roolpho0",
+            "bucket_key_enabled": false,
+            "cache_control": "",
+            "checksum_algorithm": null,
+            "checksum_crc32": "",
+            "checksum_crc32c": "",
+            "checksum_crc64nvme": "",
+            "checksum_sha1": "",
+            "checksum_sha256": "",
+            "content": null,
+            "content_base64": null,
+            "content_disposition": "",
+            "content_encoding": "",
+            "content_language": "",
+            "content_type": "text/css",
+            "etag": "6cfb70c6b6546a7329ca153587a11343",
+            "force_destroy": false,
+            "id": "assets/index-BHYqiF2P.css",
+            "key": "assets/index-BHYqiF2P.css",
+            "kms_key_id": null,
+            "metadata": {},
+            "object_lock_legal_hold_status": "",
+            "object_lock_mode": "",
+            "object_lock_retain_until_date": "",
+            "override_provider": [],
+            "server_side_encryption": "AES256",
+            "source": "../frontend/dist/assets/index-BHYqiF2P.css",
+            "source_hash": null,
+            "storage_class": "STANDARD",
+            "tags": {},
+            "tags_all": {},
+            "version_id": "",
+            "website_redirect": ""
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "aws_s3_bucket.frontend_bucket",
+            "random_string.suffix"
+          ]
+        },
+        {
+          "index_key": "assets/index-wUAJNBv4.js",
+          "schema_version": 0,
+          "attributes": {
+            "acl": null,
+            "arn": "arn:aws:s3:::transaction-simulator-frontend-roolpho0/assets/index-wUAJNBv4.js",
+            "bucket": "transaction-simulator-frontend-roolpho0",
+            "bucket_key_enabled": false,
+            "cache_control": "",
+            "checksum_algorithm": null,
+            "checksum_crc32": "",
+            "checksum_crc32c": "",
+            "checksum_crc64nvme": "",
+            "checksum_sha1": "",
+            "checksum_sha256": "",
+            "content": null,
+            "content_base64": null,
+            "content_disposition": "",
+            "content_encoding": "",
+            "content_language": "",
+            "content_type": "application/javascript",
+            "etag": "867e1a0132b9a03441406a93b4077fb9",
+            "force_destroy": false,
+            "id": "assets/index-wUAJNBv4.js",
+            "key": "assets/index-wUAJNBv4.js",
+            "kms_key_id": null,
+            "metadata": {},
+            "object_lock_legal_hold_status": "",
+            "object_lock_mode": "",
+            "object_lock_retain_until_date": "",
+            "override_provider": [],
+            "server_side_encryption": "AES256",
+            "source": "../frontend/dist/assets/index-wUAJNBv4.js",
+            "source_hash": null,
+            "storage_class": "STANDARD",
+            "tags": {},
+            "tags_all": {},
+            "version_id": "",
+            "website_redirect": ""
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "aws_s3_bucket.frontend_bucket",
+            "random_string.suffix"
+          ]
+        },
+        {
+          "index_key": "index.html",
+          "schema_version": 0,
+          "attributes": {
+            "acl": null,
+            "arn": "arn:aws:s3:::transaction-simulator-frontend-roolpho0/index.html",
+            "bucket": "transaction-simulator-frontend-roolpho0",
+            "bucket_key_enabled": false,
+            "cache_control": "",
+            "checksum_algorithm": null,
+            "checksum_crc32": "",
+            "checksum_crc32c": "",
+            "checksum_crc64nvme": "",
+            "checksum_sha1": "",
+            "checksum_sha256": "",
+            "content": null,
+            "content_base64": null,
+            "content_disposition": "",
+            "content_encoding": "",
+            "content_language": "",
+            "content_type": "text/html",
+            "etag": "1b2b08e02c8113960c6ac5dec57f732b",
+            "force_destroy": false,
+            "id": "index.html",
+            "key": "index.html",
+            "kms_key_id": null,
+            "metadata": {},
+            "object_lock_legal_hold_status": "",
+            "object_lock_mode": "",
+            "object_lock_retain_until_date": "",
+            "override_provider": [],
+            "server_side_encryption": "AES256",
+            "source": "../frontend/dist/index.html",
+            "source_hash": null,
+            "storage_class": "STANDARD",
+            "tags": {},
+            "tags_all": {},
+            "version_id": "",
+            "website_redirect": ""
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "aws_s3_bucket.frontend_bucket",
+            "random_string.suffix"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "random_string",
+      "name": "suffix",
+      "provider": "provider[\"registry.terraform.io/hashicorp/random\"]",
+      "instances": [
+        {
+          "schema_version": 2,
+          "attributes": {
+            "id": "roolpho0",
+            "keepers": null,
+            "length": 8,
+            "lower": true,
+            "min_lower": 0,
+            "min_numeric": 0,
+            "min_special": 0,
+            "min_upper": 0,
+            "number": true,
+            "numeric": true,
+            "override_special": null,
+            "result": "roolpho0",
+            "special": false,
+            "upper": false
+          },
+          "sensitive_attributes": []
+        }
+      ]
+    }
+  ],
+  "check_results": null
+}

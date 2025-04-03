@@ -5,7 +5,7 @@ const router = Router();
 // یوزر ادمین تستی
 const TEST_ADMIN = {
   username: "admin",
-  password: "password123", // پسورد رو تغییر دادم تا مشخص‌تر باشه
+  password: "password123",
 };
 
 router.post("/login", async (req: Request, res: Response, next: NextFunction) => {

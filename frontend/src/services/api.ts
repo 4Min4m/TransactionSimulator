@@ -32,7 +32,7 @@ export const processTransaction = async (data: any): Promise<TransactionResponse
 };
 
 export const processBatch = async (data: any): Promise<any> => {
-  const response = await fetch(`${API_BASE_URL}/transactions`, {
+  const response = await fetch(`${API_BASE_URL}/process-batch`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
