@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Lock, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { login } from "../services/api";
 
 interface SignInFormProps {
   onSignIn: () => void;
@@ -19,24 +20,13 @@ export default function SignInForm({ onSignIn }: SignInFormProps) {
     setLoading(true);
 
     try {
-      const response = await fetch("/api/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          username: username.trim(),
-          password: password.trim(),
-        }),
+      const data = await login({
+        username: username.trim(),
+        password: password.trim(),
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || "Failed to sign in");
-      }
-
-      if (data.success) {
+      // اینجا فرض می‌کنم پاسخ از API یه فیلد message یا success داره
+      if (data.message === "Login successful") {
         onSignIn();
         navigate("/admin");
       } else {
@@ -50,6 +40,7 @@ export default function SignInForm({ onSignIn }: SignInFormProps) {
   };
 
   return (
+    // بقیه کد همون‌طور بمونه
     <div className="relative w-full max-w-md mx-4">
       <div className="bg-white/90 backdrop-blur-lg rounded-2xl shadow-2xl p-8 space-y-8">
         <div className="text-center">

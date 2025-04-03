@@ -27,11 +27,26 @@ exports.handler = async (event) => {
   if (path === "/api/login" && httpMethod === "POST") {
     try {
       const { username, password } = JSON.parse(body);
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({ message: "Login successful", username }),
-      };
+      if (!username || !password) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ detail: "Username and password are required" }),
+        };
+      }
+      if (username === "admin" && password === "password") {
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ message: "Login successful", username }),
+        };
+      } else {
+        return {
+          statusCode: 401,
+          headers,
+          body: JSON.stringify({ detail: "Invalid credentials" }),
+        };
+      }
     } catch (error) {
       return {
         statusCode: 400,

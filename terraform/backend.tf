@@ -36,6 +36,14 @@ resource "aws_lambda_function" "api_lambda" {
   }
 }
 
+resource "aws_lambda_permission" "api_gateway" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.api_lambda.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/*"
+}
+
 resource "aws_api_gateway_rest_api" "api" {
   name = "TransactionSimulatorAPI"
 }
@@ -45,7 +53,6 @@ resource "aws_api_gateway_resource" "api_root" {
   parent_id   = aws_api_gateway_rest_api.api.root_resource_id
   path_part   = "api"
 }
-
 
 resource "aws_api_gateway_resource" "api_login" {
   rest_api_id = aws_api_gateway_rest_api.api.id
@@ -69,41 +76,32 @@ resource "aws_api_gateway_integration" "lambda_integration_login" {
   uri                     = aws_lambda_function.api_lambda.invoke_arn
 }
 
-
 resource "aws_api_gateway_resource" "api_transactions" {
   rest_api_id = aws_api_gateway_rest_api.api.id
   parent_id   = aws_api_gateway_resource.api_root.id
   path_part   = "transactions"
 }
 
-resource "aws_api_gateway_method" "api_any" {
+resource "aws_api_gateway_method" "api_transactions_any" {
   rest_api_id   = aws_api_gateway_rest_api.api.id
   resource_id   = aws_api_gateway_resource.api_transactions.id
   http_method   = "ANY"
   authorization = "NONE"
 }
 
-resource "aws_api_gateway_integration" "lambda_integration" {
+resource "aws_api_gateway_integration" "lambda_integration_transactions" {
   rest_api_id             = aws_api_gateway_rest_api.api.id
   resource_id             = aws_api_gateway_resource.api_transactions.id
-  http_method             = aws_api_gateway_method.api_any.http_method
+  http_method             = aws_api_gateway_method.api_transactions_any.http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
   uri                     = aws_lambda_function.api_lambda.invoke_arn
 }
 
-resource "aws_lambda_permission" "api_gateway" {
-  statement_id  = "AllowAPIGatewayInvoke"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.api_lambda.function_name
-  principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/*"
-}
-
 resource "aws_api_gateway_deployment" "api_deployment" {
   depends_on = [
-    aws_api_gateway_integration.lambda_integration,
-    aws_api_gateway_integration.lambda_integration_login
+    aws_api_gateway_integration.lambda_integration_login,
+    aws_api_gateway_integration.lambda_integration_transactions
   ]
   rest_api_id = aws_api_gateway_rest_api.api.id
 }
