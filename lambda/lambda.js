@@ -2,6 +2,11 @@ const { createClient } = require("@supabase/supabase-js");
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error("SUPABASE_URL and SUPABASE_KEY must be provided in environment variables");
+}
+
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // تابع برای ساخت پیام ISO 8583
@@ -55,7 +60,6 @@ const processSingleTransaction = async (transaction) => {
   };
 };
 
-// تابع برای پردازش دسته‌ای تراکنش‌ها
 // تابع برای پردازش دسته‌ای تراکنش‌ها
 const processBatch = async (batch) => {
   console.log("Starting processBatch with:", JSON.stringify(batch));

@@ -25,14 +25,14 @@ resource "aws_lambda_function" "api_lambda" {
   function_name    = "TransactionSimulatorAPI"
   handler          = "lambda.handler"
   runtime          = "nodejs18.x"
-  timeout          = 60 
+  timeout          = 60
   role             = aws_iam_role.lambda_role.arn
   filename         = data.archive_file.lambda_zip.output_path
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
   environment {
     variables = {
-      SUPABASE_URL = "https://cbkvjddafakpnywthwmc.supabase.co"
-      SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNia3ZqZGRhZmFrcG55d3Rod21jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzcyOTE0MDgsImV4cCI6MjA1Mjg2NzQwOH0.fjPb_ZsNsp-_vf-wObGtr4R4gXL6lgzJTP2seKY_n4I"
+      SUPABASE_URL = var.supabase_url
+      SUPABASE_KEY = var.supabase_key
     }
   }
 }
