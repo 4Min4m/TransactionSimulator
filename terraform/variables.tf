@@ -9,3 +9,9 @@ variable "supabase_key" {
   type        = string
   sensitive   = true
 }
+
+variable "JWT_SECRET" {
+  description = "JWT_SECRET"
+  type        = string
+  sensitive   = true
+}

@@ -10,47 +10,46 @@ import AdminReport from "./components/AdminReport";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<"single" | "batch">("single");
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [token, setToken] = useState<string | null>(null);
   const [showSignIn, setShowSignIn] = useState(false);
 
-  const handleSignIn = () => {
-    setIsLoggedIn(true);
+  const handleSignIn = (newToken: string) => {
+    setToken(newToken);
     setShowSignIn(false);
   };
 
   const handleSignOut = () => {
-    setIsLoggedIn(false);
+    setToken(null);
   };
 
   return (
     <Router>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-[#daf1df]"> {/* پس‌زمینه سبز روشن */}
         <div className="max-w-2xl mx-auto p-6 relative">
           <div className="text-center mb-8">
             <div className="flex items-center justify-center gap-2 mb-4">
-              <CreditCard className="w-8 h-8 text-indigo-600" />
-              <h1 className="text-3xl font-bold text-gray-900">
+              <CreditCard className="w-8 h-8 text-[#255346]" /> {/* آیکون سبز تیره */}
+              <h1 className="text-3xl font-bold text-[#0b2b26]">
                 Payment Transaction Simulator
               </h1>
             </div>
-            <p className="text-gray-600">
+            <p className="text-[#153832]"> {/* متن ثانویه سبز متوسط */}
               Test payment transactions using mock data and ISO 8583 message format
             </p>
           </div>
 
-          {/* دکمه‌های Sign In/Sign Out */}
           <div className="flex justify-end mb-4">
-            {!isLoggedIn ? (
+            {!token ? (
               <button
                 onClick={() => setShowSignIn(true)}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                className="px-4 py-2 bg-[#255346] text-white rounded-md hover:bg-[#8bb69b]" /* دکمه سبز تیره با هاور سبز روشن */
               >
                 Sign In
               </button>
             ) : (
               <button
                 onClick={handleSignOut}
-                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                className="px-4 py-2 bg-[#255346] text-white rounded-md hover:bg-[#8bb69b]"
               >
                 Sign Out
               </button>
@@ -62,14 +61,14 @@ export default function App() {
               path="/"
               element={
                 <div className="bg-white shadow rounded-lg p-6">
-                  <div className="border-b border-gray-200 mb-6">
+                  <div className="border-b border-[#8bb69b] mb-6"> {/* خط سبز روشن */}
                     <nav className="-mb-px flex space-x-8">
                       <button
                         onClick={() => setActiveTab("single")}
                         className={`${
                           activeTab === "single"
-                            ? "border-indigo-500 text-indigo-600"
-                            : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                            ? "border-[#255346] text-[#255346]" /* فعال: سبز تیره */
+                            : "border-transparent text-[#153832] hover:text-[#0b2b26] hover:border-[#8bb69b]" /* غیرفعال: سبز متوسط با هاور */
                         } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
                       >
                         Single Transaction
@@ -78,15 +77,14 @@ export default function App() {
                         onClick={() => setActiveTab("batch")}
                         className={`${
                           activeTab === "batch"
-                            ? "border-indigo-500 text-indigo-600"
-                            : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                            ? "border-[#255346] text-[#255346]"
+                            : "border-transparent text-[#153832] hover:text-[#0b2b26] hover:border-[#8bb69b]"
                         } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
                       >
                         Batch Testing
                       </button>
                     </nav>
                   </div>
-
                   {activeTab === "single" ? <TransactionForm /> : <BatchForm />}
                   <TransactionHistory />
                   <TransactionChart />
@@ -96,12 +94,12 @@ export default function App() {
             <Route
               path="/admin"
               element={
-                isLoggedIn ? (
+                token ? (
                   <div className="bg-white shadow rounded-lg p-6">
-                    <AdminReport />
+                    <AdminReport token={token} />
                   </div>
                 ) : (
-                  <div className="text-center text-red-600">
+                  <div className="text-center text-[#0b2b26]"> {/* متن خطا سبز تیره */}
                     Please sign in to access the admin dashboard.
                   </div>
                 )
@@ -109,14 +107,13 @@ export default function App() {
             />
           </Routes>
 
-          {/* مدال برای SignInForm */}
-          {showSignIn && !isLoggedIn && (
+          {showSignIn && !token && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
               <div className="relative">
                 <SignInForm onSignIn={handleSignIn} />
                 <button
                   onClick={() => setShowSignIn(false)}
-                  className="absolute top-4 right-4 text-white bg-red-600 rounded-full w-8 h-8 flex items-center justify-center"
+                  className="absolute top-4 right-4 text-white bg-[#255346] rounded-full w-8 h-8 flex items-center justify-center hover:bg-[#8bb69b]"
                 >
                   ✕
                 </button>

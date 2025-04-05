@@ -9,6 +9,41 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+const defaultHeaders = {
+  "Content-Type": "application/json",
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type,Authorization,X-Requested-With",
+};
+
+// تابع کمکی برای ساخت پاسخ
+const createResponse = (statusCode, body, headers = defaultHeaders) => {
+  return {
+    statusCode,
+    headers,
+    body: JSON.stringify(body),
+  };
+};
+
+// تابع اعتبارسنجی توکن با Supabase
+const authenticateToken = async (event) => {
+  const authHeader = event.headers["authorization"] || event.headers["Authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+
+  if (!token) {
+    return createResponse(401, { detail: "No token provided" });
+  }
+
+  try {
+    const { data: user, error } = await supabase.auth.getUser(token);
+    if (error || !user) throw new Error("Invalid token");
+    return { user: user.user };
+  } catch (error) {
+    return createResponse(403, { detail: "Invalid or expired token" });
+  }
+};
+
+
 // تابع برای ساخت پیام ISO 8583
 const generateISO8583Message = (transaction, responseCode) => {
   const now = new Date();
@@ -28,9 +63,9 @@ const generateISO8583Message = (transaction, responseCode) => {
   };
 };
 
-// تابع برای پردازش یه تراکنش (برای استفاده در Batch)
+// تابع برای پردازش یه تراکنش
 const processSingleTransaction = async (transaction) => {
-  const isApproved = Math.random() < 0.9; // 90% احتمال موفقیت
+  const isApproved = Math.random() < 0.9;
   const responseCode = isApproved ? "00" : "05";
 
   const iso8583Message = generateISO8583Message(transaction, responseCode);
@@ -40,29 +75,21 @@ const processSingleTransaction = async (transaction) => {
     type: "PURCHASE",
     status: isApproved ? "APPROVED" : "DECLINED",
     iso8583_message: iso8583Message,
-    created_at: new Date().toISOString()
+    created_at: new Date().toISOString(),
   };
 
-  const { error } = await supabase
-    .from("transactions")
-    .insert([transactionData]);
-
+  const { error } = await supabase.from("transactions").insert([transactionData]);
   if (error) throw error;
 
   return {
     success: isApproved,
     message: isApproved ? "Transaction approved" : "Transaction declined",
-    data: {
-      ...transactionData,
-      responseCode: responseCode,
-      processed_at: new Date().toISOString()
-    }
+    data: { ...transactionData, responseCode, processed_at: new Date().toISOString() },
   };
 };
 
 // تابع برای پردازش دسته‌ای تراکنش‌ها
 const processBatch = async (batch) => {
-  console.log("Starting processBatch with:", JSON.stringify(batch));
   const totalTransactions = batch.total_transactions;
   const amountPerTransaction = batch.total_amount / totalTransactions;
   const delayBetweenTransactions = batch.duration_seconds / totalTransactions;
@@ -74,9 +101,7 @@ const processBatch = async (batch) => {
   const transactions = [];
 
   for (let i = 0; i < totalTransactions; i++) {
-    console.log(`Processing transaction ${i + 1}/${totalTransactions}`);
     const startTime = Date.now();
-
     const transaction = {
       card_number: "4111111111111111",
       amount: amountPerTransaction,
@@ -85,7 +110,6 @@ const processBatch = async (batch) => {
 
     try {
       const response = await processSingleTransaction(transaction);
-      console.log(`Transaction ${i + 1} response:`, JSON.stringify(response));
       if (response.success) {
         successCount++;
         totalProcessedAmount += amountPerTransaction;
@@ -94,92 +118,72 @@ const processBatch = async (batch) => {
       }
       transactions.push(response);
     } catch (error) {
-      console.error(`Error in transaction ${i + 1}:`, error);
       failureCount++;
       transactions.push({ success: false, message: "Transaction failed", error: error.message });
     }
 
     totalResponseTime += Date.now() - startTime;
-    console.log(`Delaying for ${delayBetweenTransactions} seconds`);
     await new Promise((resolve) => setTimeout(resolve, delayBetweenTransactions * 1000));
   }
 
-  const result = {
+  return {
     success_count: successCount,
     failure_count: failureCount,
     average_response_time: totalResponseTime / totalTransactions,
     total_processed_amount: totalProcessedAmount,
     transactions,
   };
-  console.log("processBatch result:", JSON.stringify(result));
-  return result;
 };
 
 exports.handler = async (event) => {
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type,Authorization,X-Requested-With"
-  };
-
-  console.log("Full event:", JSON.stringify(event, null, 2));
-
   if (event.httpMethod === "OPTIONS") {
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({})
-    };
+    return createResponse(200, {});
   }
 
-  const path = event.path || '';
+  const path = event.path || "";
   const httpMethod = event.httpMethod;
-  
-  console.log(`Processing ${httpMethod} request to ${path}`);
+
+  // مسیر جدید برای ثبت‌نام
+  if (path === "/api/signup" && httpMethod === "POST") {
+    try {
+      const requestBody = event.body ? JSON.parse(event.body) : {};
+      const { email, password } = requestBody;
+
+      if (!email || !password) {
+        return createResponse(400, { detail: "Email and password are required" });
+      }
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+      if (error) throw error;
+
+      return createResponse(200, {
+        message: "Signup successful. Please check your email to confirm.",
+        user: data.user,
+      });
+    } catch (error) {
+      return createResponse(400, { detail: error.message || "Signup failed" });
+    }
+  }
 
   if (path === "/api/login" && httpMethod === "POST") {
     try {
       const requestBody = event.body ? JSON.parse(event.body) : {};
-      const { username, password } = requestBody;
-      
-      console.log(`Login attempt for user: ${username}`);
-      
-      if (!username || !password) {
-        return {
-          statusCode: 400,
-          headers,
-          body: JSON.stringify({ detail: "Username and password are required" })
-        };
+      const { email, password } = requestBody;
+
+      if (!email || !password) {
+        return createResponse(400, { detail: "Email and password are required" });
       }
-      
-      if (username === "admin" && password === "password123") {
-        return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify({ 
-            message: "Login successful", 
-            username, 
-            token: "sample-token-would-be-jwt-in-production" 
-          })
-        };
-      } else {
-        return {
-          statusCode: 401,
-          headers,
-          body: JSON.stringify({ detail: "Invalid credentials" })
-        };
-      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+
+      const token = data.session.access_token;
+      return createResponse(200, { message: "Login successful", token, user: data.user });
     } catch (error) {
-      console.error("Login error:", error);
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ 
-          detail: "Invalid login request", 
-          error: error.message 
-        })
-      };
+      return createResponse(401, { detail: error.message || "Invalid credentials" });
     }
   }
 
@@ -189,79 +193,22 @@ exports.handler = async (event) => {
         const { data, error } = await supabase
           .from("transactions")
           .select("*")
-          .order('created_at', { ascending: false })
+          .order("created_at", { ascending: false })
           .limit(10);
-          
         if (error) throw error;
-        
-        return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify(data)
-        };
+        return createResponse(200, data);
       } catch (error) {
-        console.error("Error fetching transactions:", error);
-        return {
-          statusCode: 500,
-          headers,
-          body: JSON.stringify({ 
-            detail: "Error fetching transactions", 
-            error: error.message 
-          })
-        };
+        return createResponse(500, { detail: "Error fetching transactions", error: error.message });
       }
     }
-    
+
     if (httpMethod === "POST") {
       try {
         const requestBody = event.body ? JSON.parse(event.body) : {};
-        
-        console.log("Transaction request:", JSON.stringify(requestBody));
-        
-        const isApproved = Math.random() < 0.9;
-        const responseCode = isApproved ? "00" : "05";
-
-        const iso8583Message = generateISO8583Message(requestBody, responseCode);
-
-        const transactionData = {
-          ...requestBody,
-          type: "PURCHASE",
-          status: isApproved ? "APPROVED" : "DECLINED",
-          iso8583_message: iso8583Message,
-          created_at: new Date().toISOString()
-        };
-        
-        const { error } = await supabase
-          .from("transactions")
-          .insert([transactionData]);
-          
-        if (error) throw error;
-        
-        const response = {
-          success: isApproved,
-          message: isApproved ? "Transaction approved" : "Transaction declined",
-          data: { 
-            ...transactionData, 
-            responseCode: responseCode,
-            processed_at: new Date().toISOString()
-          }
-        };
-        
-        return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify(response)
-        };
+        const response = await processSingleTransaction(requestBody);
+        return createResponse(200, response);
       } catch (error) {
-        console.error("Error processing transaction:", error);
-        return {
-          statusCode: 400,
-          headers,
-          body: JSON.stringify({ 
-            detail: "Error processing transaction", 
-            error: error.message 
-          })
-        };
+        return createResponse(400, { detail: "Error processing transaction", error: error.message });
       }
     }
   }
@@ -269,36 +216,42 @@ exports.handler = async (event) => {
   if (path === "/api/process-batch" && httpMethod === "POST") {
     try {
       const requestBody = event.body ? JSON.parse(event.body) : {};
-      
-      console.log("Batch request:", JSON.stringify(requestBody));
-      
       const response = await processBatch(requestBody);
-      
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify(response)
-      };
+      return createResponse(200, response);
     } catch (error) {
-      console.error("Error processing batch:", error);
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ 
-          detail: "Error processing batch", 
-          error: error.message 
-        })
-      };
+      return createResponse(400, { detail: "Error processing batch", error: error.message });
     }
   }
 
-  return {
-    statusCode: 404,
-    headers,
-    body: JSON.stringify({ 
-      detail: "Not found",
-      path: path,
-      method: httpMethod
-    })
-  };
+  if (path === "/api/admin" && httpMethod === "GET") {
+    const authResult = await authenticateToken(event);
+    if (authResult.statusCode) return authResult;
+
+    try {
+      const { data, error } = await supabase
+        .from("transactions")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+
+      const totalTransactions = data.length;
+      const totalAmount = data.reduce((sum, tx) => sum + tx.amount, 0);
+      const successfulTransactions = data.filter((tx) => tx.status === "APPROVED").length;
+      const failedTransactions = data.filter((tx) => tx.status === "DECLINED").length;
+      const successRate = totalTransactions > 0 ? (successfulTransactions / totalTransactions) * 100 : 0;
+
+      return createResponse(200, {
+        totalTransactions,
+        totalAmount,
+        successfulTransactions,
+        failedTransactions,
+        successRate,
+        transactions: data.slice(0, 5),
+      });
+    } catch (error) {
+      return createResponse(500, { detail: "Error fetching admin data", error: error.message });
+    }
+  }
+
+  return createResponse(404, { detail: "Not found", path, method: httpMethod });
 };

@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "dependencies": {
     "@supabase/supabase-js": "^2.49.3",
+    "jsonwebtoken": "^9.x.x",
     "node-fetch": "^3.3.2"
   }
 }
