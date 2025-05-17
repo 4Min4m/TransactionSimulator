@@ -2,6 +2,7 @@
 
 A robust payment transaction simulator designed to test and demonstrate payment processing workflows, built with **React**, **TypeScript**, and **Supabase**. This application simulates real-world payment processing scenarios, including transaction processing, load testing, and ISO8583-like message generation. Perfect for testing the resilience of payment platforms and understanding payment workflows.
 
+<img src="paysimu.png" alt="simulator preview" width="100%">
 ---
 
 ## 🚀 **Features**
