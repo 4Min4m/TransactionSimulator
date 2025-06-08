@@ -1,24 +1,21 @@
+# buildspec-static-analysis.yml
 # This buildspec runs static analysis tools on both Infrastructure as Code (Terraform)
 # and application code (Lambda and Frontend).
 version: 0.2
 
 env:
   variables:
-    # Set to "NONE" if the pipeline to proceed even if checks find issues (for demo purposes)
-    # Set to "FAILURE" if the pipeline to fail on Checkov failures (recommended for real pipelines)
-    CHECK_FAIL_ON: "NONE"
+    CHECK_FAIL_ON: "NONE" # Set to "NONE" or "FAILURE"
 
 phases:
   install:
     commands:
-      # Install Python3 and pip for Checkov
       - echo "Installing Python3 and pip for Checkov..."
       - sudo apt-get update -y
       - sudo apt-get install -y python3 python3-pip
       - echo "Installing Checkov (IaC security scanner)..."
       - pip3 install checkov
 
-      # Install Node.js for ESLint
       - echo "Installing Node.js 20 for ESLint..."
       - curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
       - sudo apt-get install -y nodejs
@@ -26,33 +23,36 @@ phases:
       - sudo npm install -g eslint
 
       # Install ESLint specific dependencies for your backend (TypeScript)
-      # You might need to adjust these based on your actual backend/frontend package.json linting setup
+      # These commands need to be very precise or they can cause YAML parsing issues.
+      # `npm install --prefix .` is often for local module installation.
+      # If these dependencies are meant to be project-level, 'npm install' without --prefix
+      # in the respective directories is standard.
       - echo "Installing backend ESLint dependencies..."
-      - cd backend/ && npm install --prefix . @typescript-eslint/eslint-plugin @typescript-eslint/parser eslint-config-airbnb-base || true && cd ..
+      - | # Use multi-line literal style for complex commands if needed
+        cd backend/
+        npm install @typescript-eslint/eslint-plugin @typescript-eslint/parser eslint-config-airbnb-base || true
+        cd ..
       - echo "Installing frontend ESLint dependencies..."
-      - cd frontend/ && npm install --prefix . eslint-plugin-react eslint-plugin-react-hooks @typescript-eslint/eslint-plugin @typescript-eslint/parser || true && cd ..
+      - | # Use multi-line literal style for complex commands if needed
+        cd frontend/
+        npm install eslint-plugin-react eslint-plugin-react-hooks @typescript-eslint/eslint-plugin @typescript-eslint/parser || true
+        cd ..
 
   build:
     commands:
       - echo "Running Checkov for IaC security scanning on Terraform files..."
-      # Run Checkov on your Terraform files. Output results to JSON for potential later parsing/reporting.
       - checkov -d terraform/ --framework terraform --output cli -o json > checkov_results.json || true
       - if [ "$CHECK_FAIL_ON" == "FAILURE" ] && grep -q '"failures": [^0]' checkov_results.json; then echo "Checkov found failures. Review checkov_results.json."; exit 1; fi
 
       - echo "Running ESLint for backend code (TypeScript)..."
-      # Run ESLint on backend code. Adjust path to your ESLint config.
-      # '|| true' prevents the build from failing for warnings/errors, useful for initial demo.
       - eslint backend/src/ || true
 
       - echo "Running ESLint for frontend code (TypeScript/React)..."
-      # Run ESLint on frontend code. Adjust path to your ESLint config.
       - eslint frontend/src/ || true
 
   post_build:
     commands:
       - echo "Static analysis complete. Review logs for findings."
 artifacts:
-  # Output scan reports if needed for later stages (e.g., uploading to S3 or a dashboard)
   files:
-    - 'checkov_results.json' # Collect Checkov results
-  # No base-directory, output from root of CodeBuild project
+    - 'checkov_results.json'
