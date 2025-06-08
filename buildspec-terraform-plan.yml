@@ -1,0 +1,68 @@
+# buildspec-terraform-plan.yml
+# This buildspec prepares the Terraform environment and generates a deployment plan.
+# This file will be placed in the root of your 'my-payment-simulator' repository.
+version: 0.2
+
+env:
+  # Sensitive variables for Supabase access, fetched from AWS Systems Manager Parameter Store.
+  # These will be configured in the CodePipeline build action.
+  variables:
+    TF_VAR_supabase_url: "" # Placeholder, will be injected by CodePipeline
+    TF_VAR_supabase_key: "" # Placeholder, will be injected by CodePipeline
+
+phases:
+  install:
+    commands:
+      # Install Terraform 1.5.7.
+      # You might need to adjust the Terraform version if your local version differs
+      # or if a newer version is required/preferred.
+      - echo "Installing Terraform 1.5.7..."
+      - wget https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip
+      - sudo unzip terraform_1.5.7_linux_amd64.zip -d /usr/local/bin/
+      - rm terraform_1.5.7_linux_amd64.zip
+
+      - echo "Navigating to Terraform directory: ./terraform/"
+      - cd terraform/
+
+      - echo "Initializing Terraform backend..."
+      # This command connects Terraform to your S3 backend and DynamoDB lock table.
+      # Ensure the S3 bucket ('transaction-simulator-terraform-tfstate') and
+      # DynamoDB table ('terraform-state-lock-table' with primary key 'LockID' of type String)
+      # are manually created in your AWS account before this pipeline runs.
+      - terraform init -backend-config="bucket=transaction-simulator-terraform-tfstate" -backend-config="key=transaction-simulator/terraform.tfstate" -backend-config="region=us-east-1"
+
+  build:
+    commands:
+      - echo "Validating Terraform configuration syntax..."
+      - terraform validate
+
+      - echo "Checking Terraform formatting..."
+      # 'terraform fmt -check=true' will exit with a non-zero code if files are not formatted.
+      # '|| echo ...' prevents the build from failing for formatting warnings in a demo.
+      - terraform fmt -check=true || echo "WARNING: Terraform files are not formatted correctly. Please run 'terraform fmt' locally."
+
+      - echo "Generating Terraform plan and saving to plan.tfplan..."
+      # 'terraform plan -out=plan.tfplan' creates a binary plan file that can be applied later.
+      # Sensitive variables (like Supabase credentials) are passed via TF_VAR_ prefix.
+      - terraform plan -out=plan.tfplan
+
+  post_build:
+    commands:
+      - echo "Terraform plan generated successfully."
+
+artifacts:
+  # Define which files from the build are to be output as artifacts.
+  # The 'plan.tfplan' is crucial for the subsequent 'Terraform Apply' stage.
+  # We also include the prepared Lambda ZIP and Frontend 'dist' files,
+  # as Terraform 'apply' needs local access to these assets to upload them to S3/Lambda.
+  files:
+    - 'plan.tfplan'
+    # These paths are relative to the 'terraform/' directory after 'cd terraform/'
+    # The 'lambda.zip' and 'frontend/dist' are generated in earlier CodeBuild stages
+    # and passed as input artifacts to this CodeBuild project.
+    # We need to make them available in the 'terraform' directory for 'terraform apply'.
+    - '../lambda.zip'
+    - '../frontend/dist/**/*'
+  base-directory: 'terraform/' # All artifacts are collected from the 'terraform/' directory.
+                               # This means 'plan.tfplan' will be directly at the artifact root,
+                               # and 'lambda.zip' will be in 'lambda.zip', 'frontend/dist' contents will be 'frontend/dist/...'

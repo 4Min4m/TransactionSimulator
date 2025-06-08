@@ -1,0 +1,30 @@
+# This buildspec is responsible for preparing the Lambda function code.
+# It installs Node.js dependencies for the Lambda and then zips the code.
+version: 0.2
+
+phases:
+  install:
+    commands:
+      # Install Node.js 20 for Lambda packaging
+      - echo "Installing Node.js 20 for Lambda packaging..."
+      - curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+      - sudo apt-get install -y nodejs
+      # Navigate to the lambda directory to install its specific dependencies
+      - cd lambda/
+      - echo "Installing Lambda dependencies..."
+      - npm install
+  build:
+    commands:
+      - echo "Packaging Lambda function..."
+      # Create lambda.zip containing all files in the current (lambda) directory
+      # The 'zip' command is run from within the 'lambda/' directory, so '.' refers to 'lambda/'
+      - zip -r ../lambda.zip .
+  post_build:
+    commands:
+      - echo "Lambda packaging complete. Generated 'lambda.zip'."
+artifacts:
+  # Define which files from the build are to be output as artifacts.
+  # We only need the 'lambda.zip' file for deployment via Terraform.
+  files:
+    - 'lambda.zip' # The path is relative to the CodeBuild project's source root
+  base-directory: './' # Output from the root of the CodeBuild project (where lambda.zip was created)

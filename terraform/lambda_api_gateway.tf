@@ -1,3 +1,6 @@
+# This file defines the Lambda function and API Gateway for the backend.
+
+# IAM Role for Lambda
 resource "aws_iam_role" "lambda_role" {
   name = "lambda_role"
   assume_role_policy = jsonencode({
@@ -10,25 +13,30 @@ resource "aws_iam_role" "lambda_role" {
   })
 }
 
+# Attach basic execution policy to Lambda role
 resource "aws_iam_role_policy_attachment" "lambda_policy" {
   role       = aws_iam_role.lambda_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+# Data source to zip the Lambda code
 data "archive_file" "lambda_zip" {
   type        = "zip"
   source_dir  = "../lambda"
   output_path = "lambda.zip"
 }
 
+# AWS Lambda Function Definition
+# 'publish = true' ensures a new Lambda version is created on every code change
 resource "aws_lambda_function" "api_lambda" {
   function_name    = "TransactionSimulatorAPI"
   handler          = "lambda.handler"
-  runtime          = "nodejs18.x"
+  runtime          = "nodejs20.x"
   timeout          = 60
   role             = aws_iam_role.lambda_role.arn
   filename         = data.archive_file.lambda_zip.output_path
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
+  publish          = true
   environment {
     variables = {
       SUPABASE_URL = var.supabase_url
@@ -37,10 +45,32 @@ resource "aws_lambda_function" "api_lambda" {
   }
 }
 
+# AWS Lambda Alias for Production Traffic (e.g., 'LIVE')
+# This alias will initially point to the current stable Lambda version.
+# CodeDeploy will update this alias during a canary deployment.
+resource "aws_lambda_alias" "live_alias" {
+  name           = "LIVE"
+  function_name  = aws_lambda_function.api_lambda.function_name
+  function_version = aws_lambda_function.api_lambda.version # Initially points to the current published version
+  description = "Alias for live production traffic. Managed by CodeDeploy for canary deployments."
+}
+
+# AWS Lambda Alias for Pre-production/Testing (e.g., 'BETA' or 'GREEN')
+# This alias can be used for testing new versions before full rollout.
+resource "aws_lambda_alias" "beta_alias" {
+  name           = "BETA"
+  function_name  = aws_lambda_function.api_lambda.function_name
+  function_version = aws_lambda_function.api_lambda.version # Initially points to the current published version
+  description = "Alias for beta/pre-production testing. Can be used for manual verification."
+}
+
+
+# API Gateway Configuration (pointing to the LIVE alias)
 resource "aws_lambda_permission" "api_gateway" {
   statement_id  = "AllowAPIGatewayInvoke"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.api_lambda.function_name
+  # Point API Gateway to the LIVE alias ARN for invocation
+  function_name = aws_lambda_alias.live_alias.function_name # <--- Reference function name, not ARN for permission
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/*"
 }
@@ -73,9 +103,9 @@ resource "aws_api_gateway_integration" "lambda_integration_login_options" {
   rest_api_id             = aws_api_gateway_rest_api.api.id
   resource_id             = aws_api_gateway_resource.api_login.id
   http_method             = aws_api_gateway_method.api_login_options.http_method
-  integration_http_method = "POST" 
+  integration_http_method = "POST"
   type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.api_lambda.invoke_arn
+  uri                     = aws_lambda_alias.live_alias.invoke_arn # <--- Point to LIVE alias invoke ARN
 }
 
 resource "aws_api_gateway_method" "api_login_post" {
@@ -91,7 +121,7 @@ resource "aws_api_gateway_integration" "lambda_integration_login_post" {
   http_method             = aws_api_gateway_method.api_login_post.http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.api_lambda.invoke_arn
+  uri                     = aws_lambda_alias.live_alias.invoke_arn # <--- Point to LIVE alias invoke ARN
 }
 
 resource "aws_api_gateway_resource" "api_transactions" {
@@ -127,7 +157,7 @@ resource "aws_api_gateway_integration" "lambda_integration_transactions_options"
   http_method             = aws_api_gateway_method.api_transactions_options.http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.api_lambda.invoke_arn
+  uri                     = aws_lambda_alias.live_alias.invoke_arn # <--- Point to LIVE alias invoke ARN
 }
 
 resource "aws_api_gateway_integration" "lambda_integration_process_batch_options" {
@@ -136,7 +166,7 @@ resource "aws_api_gateway_integration" "lambda_integration_process_batch_options
   http_method             = aws_api_gateway_method.api_process_batch_options.http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.api_lambda.invoke_arn
+  uri                     = aws_lambda_alias.live_alias.invoke_arn # <--- Point to LIVE alias invoke ARN
 }
 
 resource "aws_api_gateway_method" "api_transactions_post" {
@@ -159,7 +189,7 @@ resource "aws_api_gateway_integration" "lambda_integration_transactions_post" {
   http_method             = aws_api_gateway_method.api_transactions_post.http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.api_lambda.invoke_arn
+  uri                     = aws_lambda_alias.live_alias.invoke_arn # <--- Point to LIVE alias invoke ARN
 }
 
 resource "aws_api_gateway_integration" "lambda_integration_process_batch_post" {
@@ -168,7 +198,7 @@ resource "aws_api_gateway_integration" "lambda_integration_process_batch_post" {
   http_method             = aws_api_gateway_method.api_process_batch_post.http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.api_lambda.invoke_arn
+  uri                     = aws_lambda_alias.live_alias.invoke_arn # <--- Point to LIVE alias invoke ARN
 }
 
 resource "aws_api_gateway_method" "api_transactions_get" {
@@ -184,7 +214,7 @@ resource "aws_api_gateway_integration" "lambda_integration_transactions_get" {
   http_method             = aws_api_gateway_method.api_transactions_get.http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.api_lambda.invoke_arn
+  uri                     = aws_lambda_alias.live_alias.invoke_arn # <--- Point to LIVE alias invoke ARN
 }
 
 # Enable CORS for API Gateway
@@ -193,7 +223,7 @@ resource "aws_api_gateway_method_response" "login_options_200" {
   resource_id   = aws_api_gateway_resource.api_login.id
   http_method   = aws_api_gateway_method.api_login_options.http_method
   status_code   = "200"
-  
+
   response_parameters = {
     "method.response.header.Access-Control-Allow-Origin"  = true,
     "method.response.header.Access-Control-Allow-Methods" = true,
@@ -202,11 +232,11 @@ resource "aws_api_gateway_method_response" "login_options_200" {
 }
 
 resource "aws_api_gateway_integration_response" "login_options_response" {
-  rest_api_id   = aws_api_gateway_rest_api.api.id
-  resource_id   = aws_api_gateway_resource.api_login.id
-  http_method   = aws_api_gateway_method.api_login_options.http_method
-  status_code   = aws_api_gateway_method_response.login_options_200.status_code
-  
+  rest_api_id             = aws_api_gateway_rest_api.api.id
+  resource_id             = aws_api_gateway_resource.api_login.id
+  http_method             = aws_api_gateway_method.api_login_options.http_method
+  status_code             = aws_api_gateway_method_response.login_options_200.status_code
+
   response_parameters = {
     "method.response.header.Access-Control-Allow-Origin"  = "'*'",
     "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
@@ -224,7 +254,7 @@ resource "aws_api_gateway_method_response" "transactions_options_200" {
   resource_id   = aws_api_gateway_resource.api_transactions.id
   http_method   = aws_api_gateway_method.api_transactions_options.http_method
   status_code   = "200"
-  
+
   response_parameters = {
     "method.response.header.Access-Control-Allow-Origin"  = true,
     "method.response.header.Access-Control-Allow-Methods" = true,
@@ -237,7 +267,7 @@ resource "aws_api_gateway_method_response" "process_batch_options_200" {
   resource_id   = aws_api_gateway_resource.api_process_batch.id
   http_method   = aws_api_gateway_method.api_process_batch_options.http_method
   status_code   = "200"
-  
+
   response_parameters = {
     "method.response.header.Access-Control-Allow-Origin"  = true
     "method.response.header.Access-Control-Allow-Methods" = true
@@ -246,11 +276,11 @@ resource "aws_api_gateway_method_response" "process_batch_options_200" {
 }
 
 resource "aws_api_gateway_integration_response" "transactions_options_response" {
-  rest_api_id   = aws_api_gateway_rest_api.api.id
-  resource_id   = aws_api_gateway_resource.api_transactions.id
-  http_method   = aws_api_gateway_method.api_transactions_options.http_method
-  status_code   = aws_api_gateway_method_response.transactions_options_200.status_code
-  
+  rest_api_id             = aws_api_gateway_rest_api.api.id
+  resource_id             = aws_api_gateway_resource.api_transactions.id
+  http_method             = aws_api_gateway_method.api_transactions_options.http_method
+  status_code             = aws_api_gateway_method_response.transactions_options_200.status_code
+
   response_parameters = {
     "method.response.header.Access-Control-Allow-Origin"  = "'*'",
     "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
@@ -264,11 +294,11 @@ resource "aws_api_gateway_integration_response" "transactions_options_response" 
 }
 
 resource "aws_api_gateway_integration_response" "process_batch_options_response" {
-  rest_api_id   = aws_api_gateway_rest_api.api.id
-  resource_id   = aws_api_gateway_resource.api_process_batch.id
-  http_method   = aws_api_gateway_method.api_process_batch_options.http_method
-  status_code   = aws_api_gateway_method_response.process_batch_options_200.status_code
-  
+  rest_api_id             = aws_api_gateway_rest_api.api.id
+  resource_id             = aws_api_gateway_resource.api_process_batch.id
+  http_method             = aws_api_gateway_method.api_process_batch_options.http_method
+  status_code             = aws_api_gateway_method_response.process_batch_options_200.status_code
+
   response_parameters = {
     "method.response.header.Access-Control-Allow-Origin"  = "'*'"
     "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization,X-Requested-With'"
@@ -296,7 +326,7 @@ resource "aws_api_gateway_deployment" "api_deployment" {
     aws_api_gateway_integration_response.transactions_options_response,
     aws_api_gateway_integration_response.process_batch_options_response
   ]
-  
+
   rest_api_id = aws_api_gateway_rest_api.api.id
 
   lifecycle {
@@ -316,7 +346,7 @@ resource "aws_api_gateway_stage" "prod_stage" {
 # Create IAM role for API Gateway CloudWatch Logs
 resource "aws_iam_role" "api_gateway_cloudwatch_role" {
   name = "api_gateway_cloudwatch_role"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -351,7 +381,7 @@ resource "aws_api_gateway_method_settings" "all" {
     logging_level   = "OFF"  # Disable logging
     data_trace_enabled = false
   }
-  
+
   depends_on = [aws_api_gateway_account.api_gateway_account]
 }
 

@@ -1,0 +1,53 @@
+# buildspec-terraform-apply.yml
+# This buildspec applies the Terraform plan to deploy or update AWS infrastructure.
+# This file will be placed in the root of your 'my-payment-simulator' repository.
+version: 0.2
+
+env:
+  # Sensitive variables for Supabase access, fetched from AWS Systems Manager Parameter Store.
+  # These will be configured in the CodePipeline build action.
+  variables:
+    TF_VAR_supabase_url: "" # Placeholder, will be injected by CodePipeline
+    TF_VAR_supabase_key: "" # Placeholder, will be injected by CodePipeline
+
+phases:
+  install:
+    commands:
+      # Install Terraform 1.5.7.
+      # You might need to adjust the Terraform version if your local version differs
+      # or if a newer version is required/preferred.
+      - echo "Installing Terraform 1.5.7..."
+      - wget https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip
+      - sudo unzip terraform_1.5.7_linux_amd64.zip -d /usr/local/bin/
+      - rm terraform_1.5.7_linux_amd64.zip
+
+      - echo "Navigating to Terraform directory: ./terraform/"
+      - cd terraform/
+
+      - echo "Initializing Terraform backend..."
+      # This command connects Terraform to your S3 backend and DynamoDB lock table.
+      # Ensure the S3 bucket ('transaction-simulator-terraform-tfstate') and
+      # DynamoDB table ('terraform-state-lock-table' with primary key 'LockID' of type String)
+      # are manually created in your AWS account before this pipeline runs.
+      - terraform init -backend-config="bucket=transaction-simulator-terraform-tfstate" -backend-config="key=transaction-simulator/terraform.tfstate" -backend-config="region=us-east-1"
+
+  build:
+    commands:
+      - echo "Applying Terraform plan: plan.tfplan..."
+      # 'terraform apply "plan.tfplan"' applies the saved plan.
+      # This is safer than 'terraform apply -auto-approve' as it ensures the exact changes from plan are applied.
+      # The 'plan.tfplan' file is passed as an input artifact from the 'Terraform Plan' stage.
+      - terraform apply "plan.tfplan"
+
+  post_build:
+    commands:
+      - echo "Terraform apply completed successfully."
+      # Capture Terraform outputs to a JSON file. This artifact will be used by subsequent pipeline stages (e.g., Smoke Tests).
+      - terraform output -json > terraform_outputs.json
+
+artifacts:
+  # Define which files from the build are to be output as artifacts.
+  # The 'terraform_outputs.json' file is crucial for later stages that need deployed URLs.
+  files:
+    - 'terraform_outputs.json'
+  base-directory: 'terraform/' # All artifacts are collected from the 'terraform/' directory.
