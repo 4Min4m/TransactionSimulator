@@ -9,50 +9,145 @@ env:
 
 phases:
   install:
+    runtime-versions:
+      nodejs: 20
+      python: 3.11
     commands:
-      - echo "Installing Python3 and pip for Checkov..."
-      - sudo apt-get update -y
-      - sudo apt-get install -y python3 python3-pip
       - echo "Installing Checkov (IaC security scanner)..."
-      - pip3 install checkov
-
-      - echo "Installing Node.js 20 for ESLint..."
-      - curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-      - sudo apt-get install -y nodejs
+      - pip install checkov
+      
       - echo "Installing ESLint globally..."
-      - sudo npm install -g eslint
+      - npm install -g eslint
+      
+      # Install backend dependencies if package.json exists
+      - |
+        if [ -d "backend" ] && [ -f "backend/package.json" ]; then
+          echo "Installing backend dependencies..."
+          cd backend/
+          npm ci --only=dev || npm install --only=dev
+          cd ..
+        else
+          echo "No backend/package.json found, installing ESLint TypeScript deps globally..."
+          npm install -g @typescript-eslint/eslint-plugin @typescript-eslint/parser eslint-config-airbnb-base
+        fi
+      
+      # Install frontend dependencies if package.json exists
+      - |
+        if [ -d "frontend" ] && [ -f "frontend/package.json" ]; then
+          echo "Installing frontend dependencies..."
+          cd frontend/
+          npm ci --only=dev || npm install --only=dev
+          cd ..
+        else
+          echo "No frontend/package.json found, installing React ESLint deps globally..."
+          npm install -g eslint-plugin-react eslint-plugin-react-hooks @typescript-eslint/eslint-plugin @typescript-eslint/parser
+        fi
 
-      # Install ESLint specific dependencies for your backend (TypeScript)
-      # These commands need to be very precise or they can cause YAML parsing issues.
-      # `npm install --prefix .` is often for local module installation.
-      # If these dependencies are meant to be project-level, 'npm install' without --prefix
-      # in the respective directories is standard.
-      - echo "Installing backend ESLint dependencies..."
-      - | # Use multi-line literal style for complex commands if needed
-        cd backend/
-        npm install @typescript-eslint/eslint-plugin @typescript-eslint/parser eslint-config-airbnb-base || true
-        cd ..
-      - echo "Installing frontend ESLint dependencies..."
-      - | # Use multi-line literal style for complex commands if needed
-        cd frontend/
-        npm install eslint-plugin-react eslint-plugin-react-hooks @typescript-eslint/eslint-plugin @typescript-eslint/parser || true
-        cd ..
+  pre_build:
+    commands:
+      - echo "Verifying tool installations..."
+      - checkov --version
+      - eslint --version
+      - node --version
 
   build:
     commands:
       - echo "Running Checkov for IaC security scanning on Terraform files..."
-      - checkov -d terraform/ --framework terraform --output cli -o json > checkov_results.json || true
-      - if [ "$CHECK_FAIL_ON" == "FAILURE" ] && grep -q '"failures": [^0]' checkov_results.json; then echo "Checkov found failures. Review checkov_results.json."; exit 1; fi
-
+      - |
+        if [ -d "terraform" ]; then
+          checkov -d terraform/ --framework terraform --output cli --output json --output-file-path . || CHECKOV_EXIT_CODE=$?
+          if [ -f "results_json.json" ]; then
+            mv results_json.json checkov_results.json
+          else
+            echo '{"summary": {"failed": 0, "passed": 0, "skipped": 0}, "results": {"failed_checks": []}}' > checkov_results.json
+          fi
+          
+          # Check if we should fail on Checkov findings
+          if [ "$CHECK_FAIL_ON" == "FAILURE" ] && [ "${CHECKOV_EXIT_CODE:-0}" -ne 0 ]; then
+            echo "Checkov found security issues. Review checkov_results.json for details."
+            cat checkov_results.json
+            exit 1
+          fi
+        else
+          echo "No terraform/ directory found, skipping Checkov scan"
+          echo '{"summary": {"failed": 0, "passed": 0, "skipped": 0}, "results": {"failed_checks": []}}' > checkov_results.json
+        fi
+      
       - echo "Running ESLint for backend code (TypeScript)..."
-      - eslint backend/src/ || true
-
+      - |
+        if [ -d "backend/src" ]; then
+          cd backend/
+          if [ -f ".eslintrc.json" ] || [ -f ".eslintrc.js" ] || [ -f "eslint.config.js" ]; then
+            eslint src/ --ext .ts,.js --format json --output-file ../eslint_backend_results.json || BACKEND_LINT_EXIT_CODE=$?
+            eslint src/ --ext .ts,.js || true  # Also show CLI output
+          else
+            echo "No ESLint config found in backend/, running with basic TypeScript config..."
+            eslint src/ --ext .ts,.js --parser @typescript-eslint/parser --format json --output-file ../eslint_backend_results.json || BACKEND_LINT_EXIT_CODE=$?
+            eslint src/ --ext .ts,.js --parser @typescript-eslint/parser || true
+          fi
+          cd ..
+          
+          if [ "${BACKEND_LINT_EXIT_CODE:-0}" -ne 0 ]; then
+            echo "Backend ESLint found issues. Review eslint_backend_results.json for details."
+            if [ "$CHECK_FAIL_ON" == "FAILURE" ]; then
+              exit 1
+            fi
+          fi
+        else
+          echo "No backend/src/ directory found, skipping backend ESLint"
+          echo '[]' > eslint_backend_results.json
+        fi
+      
       - echo "Running ESLint for frontend code (TypeScript/React)..."
-      - eslint frontend/src/ || true
+      - |
+        if [ -d "frontend/src" ]; then
+          cd frontend/
+          if [ -f ".eslintrc.json" ] || [ -f ".eslintrc.js" ] || [ -f "eslint.config.js" ]; then
+            eslint src/ --ext .ts,.tsx,.js,.jsx --format json --output-file ../eslint_frontend_results.json || FRONTEND_LINT_EXIT_CODE=$?
+            eslint src/ --ext .ts,.tsx,.js,.jsx || true  # Also show CLI output
+          else
+            echo "No ESLint config found in frontend/, running with basic React/TypeScript config..."
+            eslint src/ --ext .ts,.tsx,.js,.jsx --parser @typescript-eslint/parser --format json --output-file ../eslint_frontend_results.json || FRONTEND_LINT_EXIT_CODE=$?
+            eslint src/ --ext .ts,.tsx,.js,.jsx --parser @typescript-eslint/parser || true
+          fi
+          cd ..
+          
+          if [ "${FRONTEND_LINT_EXIT_CODE:-0}" -ne 0 ]; then
+            echo "Frontend ESLint found issues. Review eslint_frontend_results.json for details."
+            if [ "$CHECK_FAIL_ON" == "FAILURE" ]; then
+              exit 1
+            fi
+          fi
+        else
+          echo "No frontend/src/ directory found, skipping frontend ESLint"
+          echo '[]' > eslint_frontend_results.json
+        fi
 
   post_build:
     commands:
-      - echo "Static analysis complete. Review logs for findings."
+      - echo "Static analysis complete. Generating summary report..."
+      - echo "=== STATIC ANALYSIS SUMMARY ==="
+      - |
+        if [ -f "checkov_results.json" ]; then
+          CHECKOV_FAILED=$(cat checkov_results.json | jq -r '.summary.failed // 0' 2>/dev/null || echo "0")
+          CHECKOV_PASSED=$(cat checkov_results.json | jq -r '.summary.passed // 0' 2>/dev/null || echo "0")
+          echo "Checkov: $CHECKOV_FAILED failed, $CHECKOV_PASSED passed"
+        fi
+      - |
+        if [ -f "eslint_backend_results.json" ]; then
+          BACKEND_ISSUES=$(cat eslint_backend_results.json | jq 'length' 2>/dev/null || echo "0")
+          echo "Backend ESLint: $BACKEND_ISSUES files with issues"
+        fi
+      - |
+        if [ -f "eslint_frontend_results.json" ]; then
+          FRONTEND_ISSUES=$(cat eslint_frontend_results.json | jq 'length' 2>/dev/null || echo "0")
+          echo "Frontend ESLint: $FRONTEND_ISSUES files with issues"
+        fi
+      - echo "Review detailed results in the artifacts for specific findings."
+
 artifacts:
   files:
     - 'checkov_results.json'
+    - 'eslint_backend_results.json'
+    - 'eslint_frontend_results.json'
+  name: static-analysis-results
