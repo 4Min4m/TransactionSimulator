@@ -35,4 +35,5 @@ artifacts:
     - "plan.tfplan"
     - "../lambda.zip"
     - "../frontend/dist/**/*"
+    - "../buildspec-terraform-apply.yml"
   base-directory: "terraform"
