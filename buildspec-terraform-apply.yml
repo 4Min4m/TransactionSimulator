@@ -1,15 +1,35 @@
 version: 0.2
 
+env:
+  variables:
+    TF_VAR_supabase_url: ""
+    TF_VAR_supabase_key: ""
+
 phases:
+  install:
+    commands:
+      - "echo Installing Terraform 1.5.7..."
+      - "wget -q https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip"
+      - "sudo unzip -q terraform_1.5.7_linux_amd64.zip -d /usr/local/bin/"
+      - "rm terraform_1.5.7_linux_amd64.zip"
+      - "echo Navigating to Terraform directory..."
+      - "cd terraform"
+      - "echo Initializing Terraform backend..."
+      - "terraform init -backend-config=\"bucket=transaction-simulator-terraform-tfstate\" -backend-config=\"key=transaction-simulator/terraform.tfstate\" -backend-config=\"region=us-east-1\""
+
   build:
     commands:
-      - "echo 'Current directory:'"
-      - "pwd"
-      - "echo 'Files in current directory:'"
-      - "ls -la"
-      - "echo 'Looking for buildspec files:'"
-      - "find . -name '*buildspec*' -type f"
-      - "echo 'Contents of root directory:'"
-      - "ls -la /"
-      - "echo 'Contents of codebuild directory:'"
-      - "ls -la /codebuild/output/src*/"
+      - "echo Applying Terraform plan..."
+      - "terraform apply -auto-approve \"plan.tfplan\""
+
+  post_build:
+    commands:
+      - "echo Terraform apply completed successfully."
+      - "terraform output -json > terraform_outputs.json"
+
+artifacts:
+  files:
+    - "terraform_outputs.json"
+    - "terraform/terraform.tfstate"
+    - "terraform/terraform.tfstate.backup"
+  base-directory: "terraform"
