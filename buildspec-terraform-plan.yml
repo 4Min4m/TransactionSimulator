@@ -8,31 +8,31 @@ env:
 phases:
   install:
     commands:
-      - echo "Installing Terraform 1.5.7..."
+      - echo Installing Terraform 1.5.7...
       - wget -q https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip
       - sudo unzip -q terraform_1.5.7_linux_amd64.zip -d /usr/local/bin/
       - rm terraform_1.5.7_linux_amd64.zip
-      - echo "Navigating to Terraform directory: ./terraform/"
-      - cd terraform/
-      - echo "Initializing Terraform backend..."
+      - echo Navigating to Terraform directory...
+      - cd terraform
+      - echo Initializing Terraform backend...
       - terraform init -backend-config="bucket=transaction-simulator-terraform-tfstate" -backend-config="key=transaction-simulator/terraform.tfstate" -backend-config="region=us-east-1"
 
   build:
     commands:
-      - echo "Validating Terraform configuration syntax..."
+      - echo Validating Terraform configuration...
       - terraform validate
-      - echo "Checking Terraform formatting..."
+      - echo Checking Terraform formatting...
       - terraform fmt -check=true || echo "WARNING: Terraform files are not formatted correctly. Please run 'terraform fmt' locally."
-      - echo "Generating Terraform plan and saving to plan.tfplan..."
+      - echo Generating Terraform plan...
       - terraform plan -out=plan.tfplan
 
   post_build:
     commands:
-      - echo "Terraform plan generated successfully."
+      - echo Terraform plan generated successfully.
 
 artifacts:
   files:
     - plan.tfplan
     - ../lambda.zip
     - ../frontend/dist/**/*
-  base-directory: terraform/
+  base-directory: terraform
