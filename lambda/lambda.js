@@ -9,7 +9,7 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// تابع برای ساخت پیام ISO 8583
+// ISO 8583
 const generateISO8583Message = (transaction, responseCode) => {
   const now = new Date();
   return {
@@ -28,9 +28,8 @@ const generateISO8583Message = (transaction, responseCode) => {
   };
 };
 
-// تابع برای پردازش یه تراکنش (برای استفاده در Batch)
 const processSingleTransaction = async (transaction) => {
-  const isApproved = Math.random() < 0.9; // 90% احتمال موفقیت
+  const isApproved = Math.random() < 0.9; // 90%
   const responseCode = isApproved ? "00" : "05";
 
   const iso8583Message = generateISO8583Message(transaction, responseCode);
@@ -60,7 +59,6 @@ const processSingleTransaction = async (transaction) => {
   };
 };
 
-// تابع برای پردازش دسته‌ای تراکنش‌ها
 const processBatch = async (batch) => {
   console.log("Starting processBatch with:", JSON.stringify(batch));
   const totalTransactions = batch.total_transactions;
@@ -183,88 +181,88 @@ exports.handler = async (event) => {
     }
   }
 
-  if (path === "/api/transactions") {
-    if (httpMethod === "GET") {
-      try {
-        const { data, error } = await supabase
-          .from("transactions")
-          .select("*")
-          .order('created_at', { ascending: false })
-          .limit(10);
-          
-        if (error) throw error;
-        
-        return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify(data)
-        };
-      } catch (error) {
-        console.error("Error fetching transactions:", error);
-        return {
-          statusCode: 500,
-          headers,
-          body: JSON.stringify({ 
-            detail: "Error fetching transactions", 
-            error: error.message 
-          })
-        };
-      }
-    }
-    
-    if (httpMethod === "POST") {
-      try {
-        const requestBody = event.body ? JSON.parse(event.body) : {};
-        
-        console.log("Transaction request:", JSON.stringify(requestBody));
-        
-        const isApproved = Math.random() < 0.9;
-        const responseCode = isApproved ? "00" : "05";
+if (path === "/api/transactions" && httpMethod === "POST") {
+  try {
+    const requestBody = event.body ? JSON.parse(event.body) : {};
+    const { merchant_id, amount, card_number, order_id } = requestBody;
 
-        const iso8583Message = generateISO8583Message(requestBody, responseCode);
+    console.log('Received transaction request:', JSON.stringify(requestBody, null, 2));
 
-        const transactionData = {
-          ...requestBody,
-          type: "PURCHASE",
-          status: isApproved ? "APPROVED" : "DECLINED",
-          iso8583_message: iso8583Message,
-          created_at: new Date().toISOString()
-        };
-        
-        const { error } = await supabase
-          .from("transactions")
-          .insert([transactionData]);
-          
-        if (error) throw error;
-        
-        const response = {
-          success: isApproved,
-          message: isApproved ? "Transaction approved" : "Transaction declined",
-          data: { 
-            ...transactionData, 
-            responseCode: responseCode,
-            processed_at: new Date().toISOString()
-          }
-        };
-        
-        return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify(response)
-        };
-      } catch (error) {
-        console.error("Error processing transaction:", error);
-        return {
-          statusCode: 400,
-          headers,
-          body: JSON.stringify({ 
-            detail: "Error processing transaction", 
-            error: error.message 
-          })
-        };
-      }
+    // validating input
+    if (!merchant_id || !amount || !card_number || !order_id) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ 
+          detail: "merchant_id, amount, card_number, and order_id are required" 
+        })
+      };
     }
+    if (merchant_id !== "thread-thought") {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ detail: "Invalid merchant_id" })
+      };
+    }
+    if (typeof amount !== "number" || amount <= 0) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ detail: "amount must be a positive number" })
+      };
+    }
+
+    const isApproved = Math.random() < 0.9; // 90% احتمال موفقیت
+    const responseCode = isApproved ? "00" : "05";
+
+    const iso8583Message = generateISO8583Message(requestBody, responseCode);
+
+    const transactionData = {
+      ...requestBody,
+      type: "PURCHASE",
+      status: isApproved ? "APPROVED" : "DECLINED",
+      iso8583_message: iso8583Message,
+      created_at: new Date().toISOString(),
+      order_id: requestBody.order_id
+    };
+
+    const { error } = await supabase
+      .from("transactions")
+      .insert([transactionData]);
+
+    if (error) {
+      console.error('Supabase insert error:', error.message, error.details);
+      throw error;
+    }
+
+    const response = {
+      success: isApproved,
+      message: isApproved ? "Transaction approved" : "Transaction declined",
+      data: { 
+        ...transactionData, 
+        responseCode: responseCode,
+        processed_at: new Date().toISOString()
+      }
+    };
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify(response)
+    };
+  } catch (error) {
+    console.error("Error processing transaction:", error);
+    return {
+      statusCode: 400,
+      headers,
+      body: JSON.stringify({ 
+        detail: "Error processing transaction", 
+        error: error.message 
+      })
+    };
   }
+}
 
   if (path === "/api/process-batch" && httpMethod === "POST") {
     try {
