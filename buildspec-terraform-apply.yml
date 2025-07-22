@@ -23,6 +23,7 @@ phases:
       - echo Applying Terraform plan...
       - echo Checking frontend/dist contents...
       - ls -la ../frontend/dist
+      - ls -la ../frontend/dist/assets || echo "Assets directory not found!"
       - terraform apply -auto-approve plan.tfplan
       - echo Exporting Terraform outputs to JSON...
       - terraform output -json > ../terraform_outputs.json
@@ -35,4 +36,4 @@ artifacts:
   files:
     - terraform_outputs.json
     - appspec.yml
-  base-directory: "."
+  base-directory: .

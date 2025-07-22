@@ -8,36 +8,42 @@ env:
 phases:
   install:
     commands:
-      - "echo Installing Terraform 1.5.7..."
-      - "wget -q https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip"
-      - "sudo unzip -q terraform_1.5.7_linux_amd64.zip -d /usr/local/bin/"
-      - "rm terraform_1.5.7_linux_amd64.zip"
-      - "echo Navigating to Terraform directory..."
-      - "cd terraform"
-      - "echo Initializing Terraform backend..."
-      - "terraform init -backend-config=\"bucket=transaction-simulator-terraform-tfstate\" -backend-config=\"key=transaction-simulator/terraform.tfstate\" -backend-config=\"region=us-east-1\""
-
+      - echo Installing Terraform 1.5.7...
+      - wget -q https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip
+      - sudo unzip -q terraform_1.5.7_linux_amd64.zip -d /usr/local/bin/
+      - rm terraform_1.5.7_linux_amd64.zip
+      - echo Navigating to Terraform directory...
+      - cd terraform
+      - echo Initializing Terraform backend...
+      - terraform init -backend-config="bucket=transaction-simulator-terraform-tfstate" -backend-config="key=transaction-simulator/terraform.tfstate" -backend-config="region=us-east-1"
   build:
     commands:
-      - "echo Validating Terraform configuration..."
-      - "terraform validate"
-      - "echo Checking Terraform formatting..."
-      - "terraform fmt -check=true || echo \"WARNING: Terraform files are not formatted correctly. Please run 'terraform fmt' locally.\""
-      - "echo Generating Terraform plan..."
-      - "terraform plan -out=plan.tfplan"
-
+      - echo Validating Terraform configuration...
+      - terraform validate
+      - echo Checking Terraform formatting...
+      - terraform fmt -check=true || echo "WARNING: Terraform files are not formatted correctly. Please run 'terraform fmt' locally."
+      - echo Generating Terraform plan...
+      - terraform plan -out=plan.tfplan
   post_build:
     commands:
-      - "echo Terraform plan generated successfully."
-      - "echo Copying buildspec-terraform-apply.yml to root for next stage..."
-      - "cp ../buildspec-terraform-apply.yml ."
-
+      - echo Terraform plan generated successfully.
+      - echo Copying buildspec-terraform-apply.yml to root for next stage...
+      - cp ../buildspec-terraform-apply.yml .
+      - echo Copying frontend/dist and lambda.zip to root...
+      - cp -r ../frontend/dist .
+      - cp ../lambda.zip .
+      - cp ../appspec.yml .
+      - echo Checking copied files...
+      - ls -la dist
+      - ls -la dist/assets || echo "Assets directory not found!"
+      - ls -la lambda.zip
+      - ls -la appspec.yml
 artifacts:
   files:
-    - "terraform/plan.tfplan"
-    - "terraform/*.tf"
-    - "lambda.zip"
-    - "frontend/dist/**/*"
-    - "buildspec-terraform-apply.yml"
-    - "appspec.yml"
-  base-directory: "."
+    - terraform/plan.tfplan
+    - terraform/*.tf
+    - dist/**/*
+    - lambda.zip
+    - appspec.yml
+    - buildspec-terraform-apply.yml
+  base-directory: .

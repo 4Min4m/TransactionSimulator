@@ -1,4 +1,5 @@
 version: 0.2
+
 phases:
   install:
     commands:
@@ -6,6 +7,10 @@ phases:
       - curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
       - apt-get install -y nodejs
       - cd frontend
+      - echo Checking Node.js version...
+      - node -v
+      - npm -v
+      - echo Installing frontend dependencies...
       - npm install
   build:
     commands:
@@ -13,8 +18,13 @@ phases:
       - npm run build
       - echo Checking frontend/dist contents...
       - ls -la dist
-      - ls -la dist/assets
-  artifacts:
-    files:
-      - '**/*'
-    base-directory: 'frontend/dist'
+      - ls -la dist/assets || echo "Assets directory not found!"
+      - echo Copying dist to root for Terraform...
+      - cp -r dist/* ../frontend/dist
+  post_build:
+    commands:
+      - echo Frontend build complete.
+artifacts:
+  files:
+    - '**/*'
+  base-directory: frontend/dist
