@@ -39,4 +39,5 @@ artifacts:
     - "lambda.zip"
     - "frontend/dist/**/*"
     - "buildspec-terraform-apply.yml"
+    - "appspec.yml"
   base-directory: "."

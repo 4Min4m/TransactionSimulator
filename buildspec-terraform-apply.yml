@@ -21,9 +21,13 @@ phases:
   build:
     commands:
       - echo Applying Terraform plan...
+      - echo Checking frontend/dist contents...
+      - ls -la ../frontend/dist
       - terraform apply -auto-approve plan.tfplan
       - echo Exporting Terraform outputs to JSON...
       - terraform output -json > terraform_outputs.json
+      - echo Checking generated terraform_outputs.json...
+      - ls -la terraform/terraform_outputs.json
   post_build:
     commands:
       - echo Terraform apply completed successfully.
