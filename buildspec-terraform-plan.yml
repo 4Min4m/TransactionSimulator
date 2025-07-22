@@ -29,11 +29,13 @@ phases:
   post_build:
     commands:
       - "echo Terraform plan generated successfully."
+      - "echo Copying buildspec-terraform-apply.yml to root for next stage..."
+      - "cp ../buildspec-terraform-apply.yml ."
 
 artifacts:
   files:
-    - "plan.tfplan"
-    - "../lambda.zip"
-    - "../frontend/dist/**/*"
-    - "../buildspec-terraform-apply.yml"
-  base-directory: "terraform"
+    - "terraform/plan.tfplan"
+    - "lambda.zip"
+    - "frontend/dist/**/*"
+    - "buildspec-terraform-apply.yml"
+  base-directory: "."
