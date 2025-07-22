@@ -35,6 +35,7 @@ phases:
 artifacts:
   files:
     - "terraform/plan.tfplan"
+    - "terraform/*.tf"
     - "lambda.zip"
     - "frontend/dist/**/*"
     - "buildspec-terraform-apply.yml"
