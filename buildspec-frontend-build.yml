@@ -19,8 +19,6 @@ phases:
       - echo Checking frontend/dist contents...
       - ls -la dist
       - ls -la dist/assets || echo "Assets directory not found!"
-      - echo Copying dist to root for Terraform...
-      - cp -r dist/* ../frontend/dist
   post_build:
     commands:
       - echo Frontend build complete.
