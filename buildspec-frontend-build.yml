@@ -1,30 +1,20 @@
-# This buildspec is for building the React/TypeScript frontend application.
-# It installs Node.js dependencies and runs the 'build' script to generate 'frontend/dist'.
 version: 0.2
-
 phases:
   install:
     commands:
-      # Use NodeSource to install Node.js 20 on the CodeBuild environment (Ubuntu)
-      - echo "Installing Node.js 20 for frontend build..."
-      - curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-      - sudo apt-get install -y nodejs
-      # Navigate to the frontend directory to install its specific dependencies
-      - cd frontend/
-      - echo "Installing frontend dependencies..."
+      - echo Installing Node.js...
+      - curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+      - apt-get install -y nodejs
+      - cd frontend
       - npm install
   build:
     commands:
-      - echo "Building frontend application..."
-      # Execute the 'build' script defined in frontend/package.json
-      # This typically creates the 'dist' directory.
+      - echo Building frontend...
       - npm run build
-  post_build:
-    commands:
-      - echo "Frontend build complete. Generated 'frontend/dist' directory."
-artifacts:
-  # Define which files from the build are to be output as artifacts.
-  # We only need the contents of the 'dist' directory for deployment to S3.
-  files:
-    - '**/*' # Include all files and subdirectories within the base-directory
-  base-directory: 'frontend/dist' # Set the base directory for the artifact to be the 'dist' folder
+      - echo Checking frontend/dist contents...
+      - ls -la dist
+      - ls -la dist/assets
+  artifacts:
+    files:
+      - '**/*'
+    base-directory: 'frontend/dist'
