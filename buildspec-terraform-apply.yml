@@ -18,12 +18,17 @@ phases:
       - cd terraform
       - echo Initializing Terraform backend...
       - terraform init -backend-config="bucket=transaction-simulator-terraform-tfstate" -backend-config="key=transaction-simulator/terraform.tfstate" -backend-config="region=us-east-1"
+      - echo Copying lambda.zip and appspec.yml from LambdaArtifact...
+      - cp ../lambda.zip .
+      - cp ../appspec.yml .
   build:
     commands:
       - echo Applying Terraform plan...
       - echo Checking frontend/dist contents...
-      - ls -la ../frontend/dist
-      - ls -la ../frontend/dist/assets || echo "Assets directory not found!"
+      - ls -la ../dist
+      - ls -la ../dist/assets || echo "Assets directory not found!"
+      - ls -la lambda.zip
+      - ls -la appspec.yml
       - terraform apply -auto-approve plan.tfplan
       - echo Exporting Terraform outputs to JSON...
       - terraform output -json > ../terraform_outputs.json
