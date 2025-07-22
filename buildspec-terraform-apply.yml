@@ -22,6 +22,8 @@ phases:
     commands:
       - echo Applying Terraform plan...
       - terraform apply -auto-approve plan.tfplan
+      - echo Exporting Terraform outputs to JSON...
+      - terraform output -json > terraform_outputs.json
   post_build:
     commands:
       - echo Terraform apply completed successfully.
