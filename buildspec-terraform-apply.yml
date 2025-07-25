@@ -12,21 +12,64 @@ phases:
       - wget -q https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip
       - sudo unzip -q terraform_1.5.7_linux_amd64.zip -d /usr/local/bin/
       - rm terraform_1.5.7_linux_amd64.zip
+      
   pre_build:
     commands:
       - echo Navigating to Terraform directory...
       - cd terraform
       - echo Initializing Terraform backend...
       - terraform init -backend-config="bucket=transaction-simulator-terraform-tfstate" -backend-config="key=transaction-simulator/terraform.tfstate" -backend-config="region=us-east-1"
-      - echo Copying lambda.zip and appspec.yml from LambdaArtifact...
-      - cp ../lambda.zip .
-      - cp ../appspec.yml .
+      
+      - echo Rebuilding Lambda package since it was not passed through artifacts...
+      - echo Checking if lambda directory exists...
+      - ls -la ../lambda || echo "Lambda directory not found in workspace"
+      
+      # Rebuild lambda.zip from source since it's not in the artifact
+      - |
+        if [ -d "../lambda" ]; then
+          echo "Building lambda.zip from source..."
+          cd ../lambda
+          npm install --production
+          zip -r ../terraform/lambda.zip .
+          cd ../terraform
+        else
+          echo "ERROR: Lambda source directory not found. Cannot build lambda.zip"
+          echo "Available files and directories:"
+          find .. -type f -name "*.js" -o -name "*.ts" -o -name "package.json" | head -20
+          exit 1
+        fi
+      
+      - echo Creating appspec.yml for CodeDeploy...
+      - |
+        cat <<EOF > appspec.yml
+        version: 0.0
+        Resources:
+          - TransactionSimulatorAPI:
+              Type: AWS::Lambda::Function
+              Properties:
+                Name: TransactionSimulatorAPI
+                Alias: LIVE
+                CurrentVersion: "\$LATEST"
+                TargetVersion: "\$LATEST"
+        Hooks:
+          - BeforeAllowTraffic: "arn:aws:lambda:us-east-1:864981715490:function:TransactionSimulatorAPI"
+          - AfterAllowTraffic: "arn:aws:lambda:us-east-1:864981715490:function:TransactionSimulatorAPI"
+        EOF
+      
+      - echo Verifying required files exist...
+      - ls -la lambda.zip
+      - ls -la appspec.yml
+      
   build:
     commands:
       - echo Applying Terraform plan...
       - echo Checking frontend/dist contents...
-      - ls -la ../dist
-      - ls -la ../dist/assets || echo "Assets directory not found!"
+      - echo "Looking for dist directory in various locations..."
+      - ls -la ../dist || echo "dist directory not found at ../dist"
+      - ls -la dist || echo "dist directory not found at ./dist" 
+      - ls -la terraform/dist || echo "dist directory not found at ./terraform/dist"
+      - echo "Checking for assets directory..."
+      - ls -la ../dist/assets || ls -la dist/assets || ls -la terraform/dist/assets || echo "Assets directory not found in any location!"
       - ls -la lambda.zip
       - ls -la appspec.yml
       - terraform apply -auto-approve plan.tfplan
@@ -34,9 +77,11 @@ phases:
       - terraform output -json > ../terraform_outputs.json
       - echo Checking generated terraform_outputs.json...
       - ls -la ../terraform_outputs.json
+      
   post_build:
     commands:
       - echo Terraform apply completed successfully.
+      
 artifacts:
   files:
     - terraform_outputs.json
