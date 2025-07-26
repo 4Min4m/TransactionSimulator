@@ -57,11 +57,38 @@ Resources:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:7.0
         Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: AWS_ACCOUNT_ID
+            Value: !Ref 'AWS::AccountId'
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref 'AWS::Region'
       Source:
         Type: CODEPIPELINE
         BuildSpec: buildspec-frontend-build.yml
       TimeoutInMinutes: 10
 
+  CreateLambdaS3BucketProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub "${AWS::StackName}-CreateLambdaS3Bucket"
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: AWS_ACCOUNT_ID
+            Value: !Ref 'AWS::AccountId'
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref 'AWS::Region'
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: buildspec-create-lambda-s3-bucket.yml
+      Tags:
+        - Key: Project
+          Value: !Ref 'AWS::StackName'
   LambdaPackageProject:
     Type: AWS::CodeBuild::Project
     Properties:
@@ -74,6 +101,11 @@ Resources:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:7.0
         Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: AWS_ACCOUNT_ID
+            Value: !Ref 'AWS::AccountId'
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref 'AWS::Region'
       Source:
         Type: CODEPIPELINE
         BuildSpec: buildspec-lambda-package.yml
@@ -91,6 +123,11 @@ Resources:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:7.0
         Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: AWS_ACCOUNT_ID
+            Value: !Ref 'AWS::AccountId'
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref 'AWS::Region'
       Source:
         Type: CODEPIPELINE
         BuildSpec: buildspec-static-analysis.yml
@@ -115,6 +152,10 @@ Resources:
           - Name: TF_VAR_supabase_key
             Type: PARAMETER_STORE
             Value: /transaction-simulator/supabase/key
+          - Name: AWS_ACCOUNT_ID
+            Value: !Ref 'AWS::AccountId'
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref 'AWS::Region'
       Source:
         Type: CODEPIPELINE
         BuildSpec: buildspec-terraform-plan.yml
@@ -139,6 +180,10 @@ Resources:
           - Name: TF_VAR_supabase_key
             Type: PARAMETER_STORE
             Value: /transaction-simulator/supabase/key
+          - Name: AWS_ACCOUNT_ID
+            Value: !Ref 'AWS::AccountId'
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref 'AWS::Region'
       Source:
         Type: CODEPIPELINE
         BuildSpec: buildspec-terraform-apply.yml
@@ -156,6 +201,11 @@ Resources:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:7.0
         Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: AWS_ACCOUNT_ID
+            Value: !Ref 'AWS::AccountId'
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref 'AWS::Region'
       Source:
         Type: CODEPIPELINE
         BuildSpec: buildspec-smoke-tests.yml
@@ -204,6 +254,21 @@ Resources:
                 - Name: SourceOutput
               OutputArtifacts:
                 - Name: FrontendArtifact
+              RunOrder: 1
+
+         # New stage for S3     
+        - Name: CreateInfrastructureBuckets 
+          Actions:
+            - Name: CreateLambdaS3Bucket
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: 1
+              InputArtifacts:
+                - Name: SourceOutput
+              Configuration:
+                ProjectName: !Ref CreateLambdaS3BucketProject
               RunOrder: 1
 
         # 3. Build Lambda Package Stage
