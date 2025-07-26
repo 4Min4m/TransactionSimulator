@@ -118,6 +118,9 @@ Resources:
       Source:
         Type: CODEPIPELINE
         BuildSpec: buildspec-terraform-plan.yml
+      SecondarySources:
+        - SourceIdentifier: LambdaS3LocationSource
+          Type: CODEPIPELINE
       TimeoutInMinutes: 15
 
   TerraformApplyProject:
@@ -142,6 +145,9 @@ Resources:
       Source:
         Type: CODEPIPELINE
         BuildSpec: buildspec-terraform-apply.yml
+      SecondarySources:
+        - SourceIdentifier: LambdaS3LocationSource
+          Type: CODEPIPELINE
       TimeoutInMinutes: 20
 
   SmokeTestsProject:
@@ -221,6 +227,7 @@ Resources:
                 - Name: SourceOutput
               OutputArtifacts:
                 - Name: LambdaArtifact
+                - Name: LambdaS3LocationArtifact
               RunOrder: 1
 
         # 4. Static Analysis Stage
@@ -253,6 +260,7 @@ Resources:
                 ProjectName: !Ref TerraformPlanProject
               InputArtifacts:
                 - Name: SourceOutput
+                - Name: LambdaS3LocationArtifact 
               OutputArtifacts:
                 - Name: TerraformPlanArtifact
               RunOrder: 1
@@ -284,6 +292,7 @@ Resources:
                 ProjectName: !Ref TerraformApplyProject
               InputArtifacts:
                 - Name: TerraformPlanArtifact
+                - Name: LambdaS3LocationArtifact
               OutputArtifacts:
                 - Name: TerraformOutputsArtifact
               RunOrder: 1
