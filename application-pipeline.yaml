@@ -24,6 +24,7 @@ Resources:
   # S3 Bucket for CodePipeline Artifacts
   CodePipelineArtifactBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
     Properties:
       BucketName: !Sub "transaction-simulator-pipeline-artifacts-${AWS::Region}-${AWS::AccountId}"
       VersioningConfiguration:
