@@ -42,7 +42,6 @@ Resources:
           Value: TransactionSimulator
         - Key: Environment
           Value: PipelineArtifacts
-      DeletionPolicy: Retain
 
   # CodeBuild Projects - Defined in this CodePipeline stack
   FrontendBuildProject:
