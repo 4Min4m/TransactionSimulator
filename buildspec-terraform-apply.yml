@@ -12,7 +12,6 @@ phases:
       - wget -q https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip
       - sudo unzip -q terraform_1.5.7_linux_amd64.zip -d /usr/local/bin/
       - rm terraform_1.5.7_linux_amd64.zip
-      
   pre_build:
     commands:
       - echo Navigating to Terraform directory...
@@ -20,28 +19,26 @@ phases:
       - echo Initializing Terraform backend...
       - terraform init -backend-config="bucket=transaction-simulator-terraform-tfstate" -backend-config="key=transaction-simulator/terraform.tfstate" -backend-config="region=us-east-1"
       - echo Verifying required files exist...
-      - ls -la lambda.zip
-      - ls -la appspec.yml
-      
+      - ls -la plan.tfplan # Keep this, as plan.tfplan IS in the input artifact (TerraformPlanArtifact)
+      - echo "Frontend dist directory check (if needed for deployment)"
+      - ls -la dist || true # Check if dist exists, but don't fail if not, as terraform applies it
+
   build:
     commands:
       - echo Applying Terraform plan...
-      - echo Checking dist contents...
-      - ls -la dist || echo "dist directory not found"
-      - ls -la lambda.zip
-      - ls -la appspec.yml
       - terraform apply -auto-approve plan.tfplan
-      - echo Exporting Terraform outputs to JSON...
-      - terraform output -json > ../terraform_outputs.json
-      - echo Checking generated terraform_outputs.json...
-      - ls -la ../terraform_outputs.json
-      
+      # After apply, generate outputs for the next stage (Smoke Tests)
+      - echo Generating Terraform outputs...
+      - terraform output -json > terraform_outputs.json
+      - mv terraform_outputs.json ../ # Move to root for artifacting
+
   post_build:
     commands:
       - echo Terraform apply completed successfully.
-      
+      - echo Verifying generated outputs...
+      - ls -la terraform_outputs.json
+
 artifacts:
   files:
-    - terraform_outputs.json
-    - appspec.yml
-  base-directory: .
+    - terraform_outputs.json # This is the main output for the next stage
+  base-directory: . # Terraform outputs are at the root
