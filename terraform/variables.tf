@@ -9,3 +9,8 @@ variable "supabase_key" {
   type        = string
   sensitive   = true
 }
+
+variable "lambda_s3_key" {
+  description = "The S3 key (path within the bucket) of the Lambda deployment package."
+  type        = string
+}
