@@ -18,8 +18,8 @@ phases:
       - cd terraform
       - echo "Sourcing Lambda S3 location variables..."
       - source ../LambdaS3LocationArtifact/build.env
-      - echo "LAMBDA_S3_BUCKET is: $LAMBDA_S3_BUCKET"
-      - echo "LAMBDA_S3_KEY is: $LAMBDA_S3_KEY"
+      - echo "LAMBDA_S3_BUCKET is $LAMBDA_S3_BUCKET"
+      - echo "LAMBDA_S3_KEY is $LAMBDA_S3_KEY"
       - echo "Initializing Terraform for apply..."
       - terraform init -backend-config="bucket=transaction-simulator-terraform-tfstate" -backend-config="key=transaction-simulator/terraform.tfstate" -backend-config="region=us-east-1"
 
