@@ -1,0 +1,390 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: DevSecOps CI/CD Pipeline for Transaction Simulator (Terraform-Driven with Lambda Canary).
+
+Parameters:
+  AppGitHubRepoName:
+    Type: String
+    Default: TransactionSimulator
+    Description: Name of the GitHub repository containing the application code (e.g., my-payment-simulator)
+  AppGitHubOwner:
+    Type: String
+    Default: 4Min4m
+    Description: GitHub username or organization name for the application repository
+  AppGitHubBranch:
+    Type: String
+    Default: main
+    Description: Git branch to use for the application code (e.g., main)
+
+  GitHubConnectionArn:
+    Type: String
+    Default: arn:aws:codeconnections:us-east-1:864981715490:connection/0235a554-6002-43b2-b35a-bd2c262a07e5
+    Description: The ARN of the AWS CodeStar Connections connection to GitHub.
+
+Resources:
+  # S3 Bucket for CodePipeline Artifacts
+  CodePipelineArtifactBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "transaction-simulator-pipeline-artifacts-${AWS::Region}-${AWS::AccountId}"
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: Project
+          Value: TransactionSimulator
+        - Key: Environment
+          Value: PipelineArtifacts
+      DeletionPolicy: Retain
+
+  # CodeBuild Projects - Defined in this CodePipeline stack
+  FrontendBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: TransactionSimulatorFrontendBuild
+      Description: Builds the React/TypeScript frontend into 'dist' directory.
+      ServiceRole: !ImportValue TransactionSimulatorCodeBuildRoleArn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        Type: LINUX_CONTAINER
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: buildspec-frontend-build.yml
+      TimeoutInMinutes: 10
+
+  LambdaPackageProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: TransactionSimulatorLambdaPackage
+      Description: Installs dependencies and zips the Lambda function code.
+      ServiceRole: !ImportValue TransactionSimulatorCodeBuildRoleArn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        Type: LINUX_CONTAINER
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: buildspec-lambda-package.yml
+      TimeoutInMinutes: 10
+
+  StaticAnalysisProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: TransactionSimulatorStaticAnalysis
+      Description: Runs Checkov for IaC and ESLint for code analysis.
+      ServiceRole: !ImportValue TransactionSimulatorCodeBuildRoleArn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        Type: LINUX_CONTAINER
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: buildspec-static-analysis.yml
+      TimeoutInMinutes: 10
+
+  TerraformPlanProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: TransactionSimulatorTerraformPlan
+      Description: Initializes Terraform and generates an execution plan.
+      ServiceRole: !ImportValue TransactionSimulatorCodeBuildRoleArn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: TF_VAR_supabase_url
+            Type: PARAMETER_STORE
+            Value: /transaction-simulator/supabase/url
+          - Name: TF_VAR_supabase_key
+            Type: PARAMETER_STORE
+            Value: /transaction-simulator/supabase/key
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: buildspec-terraform-plan.yml
+      TimeoutInMinutes: 15
+
+  TerraformApplyProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: TransactionSimulatorTerraformApply
+      Description: Applies the Terraform execution plan to deploy infrastructure.
+      ServiceRole: !ImportValue TransactionSimulatorCodeBuildRoleArn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: TF_VAR_supabase_url
+            Type: PARAMETER_STORE
+            Value: /transaction-simulator/supabase/url
+          - Name: TF_VAR_supabase_key
+            Type: PARAMETER_STORE
+            Value: /transaction-simulator/supabase/key
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: buildspec-terraform-apply.yml
+      TimeoutInMinutes: 20
+
+  SmokeTestsProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: TransactionSimulatorSmokeTests
+      Description: Runs automated smoke tests against the deployed application.
+      ServiceRole: !ImportValue TransactionSimulatorCodeBuildRoleArn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        Type: LINUX_CONTAINER
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: buildspec-smoke-tests.yml
+      TimeoutInMinutes: 10
+
+  # CodePipeline Definition
+  TransactionSimulatorPipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: TransactionSimulatorDevSecOpsPipeline
+      RoleArn: !ImportValue DevSecOpsCodePipelineServiceRoleArn
+      ArtifactStore:
+        Type: S3
+        Location: !Ref CodePipelineArtifactBucket
+
+      Stages:
+        # 1. Source Stage
+        - Name: Source
+          Actions:
+            - Name: SourceCode
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: '1'
+              Configuration:
+                ConnectionArn: !Ref GitHubConnectionArn
+                FullRepositoryId: !Sub "${AppGitHubOwner}/${AppGitHubRepoName}"
+                BranchName: !Ref AppGitHubBranch
+              OutputArtifacts:
+                - Name: SourceOutput
+              RunOrder: 1
+
+        # 2. Build Frontend Stage
+        - Name: Build-Frontend
+          Actions:
+            - Name: BuildFrontendApp
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref FrontendBuildProject
+              InputArtifacts:
+                - Name: SourceOutput
+              OutputArtifacts:
+                - Name: FrontendArtifact
+              RunOrder: 1
+
+        # 3. Build Lambda Package Stage
+        - Name: Package-Lambda
+          Actions:
+            - Name: PackageLambdaCode
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref LambdaPackageProject
+              InputArtifacts:
+                - Name: SourceOutput
+              OutputArtifacts:
+                - Name: LambdaArtifact
+              RunOrder: 1
+
+        # 4. Static Analysis Stage
+        - Name: Static-Analysis
+          Actions:
+            - Name: RunStaticAnalysis
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref StaticAnalysisProject
+              InputArtifacts:
+                - Name: SourceOutput
+              OutputArtifacts:
+                - Name: StaticAnalysisReport
+              RunOrder: 1
+
+        # 5. Terraform Plan Stage
+        - Name: Terraform-Plan
+          Actions:
+            - Name: GenerateTerraformPlan
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref TerraformPlanProject
+              InputArtifacts:
+                - Name: SourceOutput
+              OutputArtifacts:
+                - Name: TerraformPlanArtifact
+              RunOrder: 1
+
+        # 6. Manual Approval for Terraform Plan
+        - Name: Approve-Terraform-Plan
+          Actions:
+            - Name: ReviewTerraformPlan
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Provider: Manual
+                Version: '1'
+              Configuration:
+                CustomData: "Review the Terraform plan to ensure infrastructure changes are as expected before applying. Check the CodeBuild logs from the 'GenerateTerraformPlan' action."
+                NotificationArn: !ImportValue TransactionSimulatorApprovalNotificationTopicArn
+              RunOrder: 1
+
+        # 7. Terraform Apply Stage
+        - Name: Terraform-Apply
+          Actions:
+            - Name: ApplyTerraformChanges
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref TerraformApplyProject
+              InputArtifacts:
+                - Name: TerraformPlanArtifact
+              OutputArtifacts:
+                - Name: TerraformOutputsArtifact
+              RunOrder: 1
+
+        # 8. Lambda Canary Deployment Stage
+        - Name: Lambda-Canary-Deployment
+          Actions:
+            - Name: InitiateLambdaTrafficShift
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CodeDeploy
+                Version: '1'
+              Configuration:
+                ApplicationName: !Ref LambdaCodeDeployApplication
+                DeploymentGroupName: !Ref LambdaDeploymentGroup
+              InputArtifacts:
+                - Name: LambdaArtifact 
+              RunOrder: 1
+
+        # 9. Smoke Tests Stage
+        - Name: Smoke-Tests
+          Actions:
+            - Name: RunSmokeTests
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref SmokeTestsProject
+              InputArtifacts:
+                - Name: TerraformOutputsArtifact
+              OutputArtifacts:
+                - Name: SmokeTestReport
+              RunOrder: 1
+  LambdaCodeDeployApplication:
+    Type: AWS::CodeDeploy::Application
+    Properties:
+      ApplicationName: TransactionSimulatorLambdaApp
+      ComputePlatform: Lambda
+  LambdaDeploymentGroup:
+    Type: AWS::CodeDeploy::DeploymentGroup
+    Properties:
+      ApplicationName: !Ref LambdaCodeDeployApplication # Reference the application by its logical ID
+      DeploymentGroupName: TransactionSimulatorLambdaDeploymentGroup
+      DeploymentStyle:
+        DeploymentType: BLUE_GREEN # Required for Lambda traffic shifting
+        DeploymentOption: WITH_TRAFFIC_CONTROL # CORRECTED: Must be WITH_TRAFFIC_CONTROL for Lambda Blue/Green
+      ServiceRoleArn: !ImportValue TransactionSimulatorCodeDeployLambdaRoleArn
+      DeploymentConfigName: CodeDeployDefault.LambdaCanary10Percent5Minutes
+      # Other Lambda deployment config options:
+      # CodeDeployDefault.LambdaCanary10Percent10Minutes
+      # CodeDeployDefault.LambdaCanary10Percent15Minutes
+      # CodeDeployDefault.LambdaCanary10Percent30Minutes
+      # CodeDeployDefault.LambdaLinear10PercentEvery1Minute
+      # CodeDeployDefault.LambdaLinear10PercentEvery2Minutes
+      # CodeDeployDefault.LambdaLinear10PercentEvery3Minutes
+      # CodeDeployDefault.LambdaLinear10PercentEvery10Minutes
+      # CodeDeployDefault.LambdaAllAtOnce
+
+      # Auto-rollback settings
+      AutoRollbackConfiguration:
+        Enabled: true
+        Events:
+          - DEPLOYMENT_FAILURE # Rollback on deployment failure
+          - DEPLOYMENT_STOP_ON_ALARM # RECOMMENDED: Enable alarm-based rollback
+          # - DEPLOYMENT_STOP_ON_REQUEST # Manual rollback
+
+      # OPTIONAL: CloudWatch alarms for automatic rollback (example, alarms need to be defined elsewhere)
+      # AlarmConfiguration:
+      #   Enabled: true
+      #   Alarms:
+      #     - Name: !Sub "${LambdaFunctionName}-ErrorRate" # Replace LambdaFunctionName with actual logical ID or parameter
+      #     - Name: !Sub "${LambdaFunctionName}-Duration" # Replace LambdaFunctionName with actual logical ID or parameter
+
+      # Add tags to the deployment group
+      Tags:
+        - Key: Project
+          Value: TransactionSimulator
+        - Key: Environment
+          Value: Production
+    DependsOn: LambdaCodeDeployApplication
+Outputs:
+  PipelineURL:
+    Description: URL of the CodePipeline
+    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/codesuite/codepipeline/pipelines/${TransactionSimulatorPipeline}/view?region=${AWS::Region}"
+  
+  CodePipelineArtifactBucketName:
+    Description: Name of the S3 bucket used for pipeline artifacts
+    Value: !Ref CodePipelineArtifactBucket
+    Export:
+      Name: TransactionSimulatorPipelineArtifactBucketName
+
+  CodeDeployApplicationName:
+    Description: Name of the CodeDeploy Application
+    Value: !Ref LambdaCodeDeployApplication
+    Export:
+      Name: TransactionSimulatorCodeDeployApplicationName
+  DeploymentGroupName:
+    Description: Name of the CodeDeploy Deployment Group
+    Value: !Ref LambdaDeploymentGroup
+    Export:
+      Name: TransactionSimulatorCodeDeployDeploymentGroupName

@@ -16,53 +16,16 @@ phases:
       - cd terraform
       - echo Initializing Terraform backend...
       - terraform init -backend-config="bucket=transaction-simulator-terraform-tfstate" -backend-config="key=transaction-simulator/terraform.tfstate" -backend-config="region=us-east-1"
-      
+
   build:
     commands:
       - echo Validating Terraform configuration...
       - terraform validate
       - echo Checking Terraform formatting...
       - terraform fmt -check=true || echo "WARNING! Terraform files are not formatted correctly. Please run 'terraform fmt' locally."
-      
-      # Package Lambda function since it's not being passed through artifacts properly
-      - echo Packaging Lambda function...
-      - |
-        if [ -d "../lambda" ]; then
-          echo "Building lambda.zip from source..."
-          cd ../lambda
-          npm install --production
-          zip -r lambda.zip .
-          mv lambda.zip ../terraform/
-          cd ../terraform
-          echo "Lambda package created successfully"
-          ls -la lambda.zip
-        else
-          echo "ERROR: Lambda source directory not found"
-          ls -la ../
-          exit 1
-        fi
-      
-      # Create appspec.yml for CodeDeploy
-      - echo Creating appspec.yml for CodeDeploy...
-      - |
-        cat <<EOF > appspec.yml
-        version: 0.0
-        Resources:
-          - TransactionSimulatorAPI:
-              Type: AWS::Lambda::Function
-              Properties:
-                Name: TransactionSimulatorAPI
-                Alias: LIVE
-                CurrentVersion: "\$LATEST"
-                TargetVersion: "\$LATEST"
-        Hooks:
-          - BeforeAllowTraffic: "arn:aws:lambda:us-east-1:864981715490:function:TransactionSimulatorAPI"
-          - AfterAllowTraffic: "arn:aws:lambda:us-east-1:864981715490:function:TransactionSimulatorAPI"
-        EOF
-      
       - echo Generating Terraform plan...
       - terraform plan -out=plan.tfplan
-      
+
   post_build:
     commands:
       - echo Terraform plan generated successfully.
@@ -71,16 +34,11 @@ phases:
       - echo Checking copied files...
       - ls -la dist
       - ls -la dist/assets || echo "Assets directory not found!"
-      - echo Verifying Lambda artifacts...
-      - ls -la lambda.zip
-      - ls -la appspec.yml
-      
+
 artifacts:
   files:
     - terraform/plan.tfplan
     - terraform/*.tf
-    - terraform/lambda.zip
-    - terraform/appspec.yml
     - dist/**/*
     - buildspec-terraform-apply.yml
   base-directory: .
