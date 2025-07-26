@@ -23,13 +23,13 @@ phases:
       - if [ -z "$API_URL" ]; then echo "ERROR API_URL is empty. Cannot run API tests."; exit 1; fi
       - if [ -z "$FRONTEND_URL" ]; then echo "ERROR FRONTEND_URL is empty. Cannot run Frontend tests."; exit 1; fi
 
-      - echo "Testing API Gateway URL: $API_URL"
+      - echo "Testing API Gateway URL $API_URL"
       # Perform a basic health check on the API login endpoint.
       # '--fail' will cause curl to exit with an error code if the HTTP status is >= 400.
       - curl -v --fail "$API_URL/api/login"
       - echo "API Gateway smoke test passed."
 
-      - echo "Testing Frontend URL: $FRONTEND_URL"
+      - echo "Testing Frontend URL $FRONTEND_URL"
       # Check if the frontend is accessible by making a request to its root URL.
       - curl -v --fail "$FRONTEND_URL"
       - echo "Frontend smoke test passed."
