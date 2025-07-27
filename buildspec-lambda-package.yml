@@ -2,14 +2,13 @@ version: 0.2
 
 phases:
   install:
-    runtime-versions:
-      nodejs: 20
     commands:
+      - echo "Installing Node.js version 20 ..."
+      - n $NODE_20_VERSION
       - echo "Installing dependencies for Lambda function..."
       - cd lambda
       - npm install
       - echo "Dependencies installed."
-
   build:
     commands:
       - echo "Zipping Lambda function code..."
@@ -25,7 +24,6 @@ phases:
       - echo "LAMBDA_S3_BUCKET=$LAMBDA_CODE_S3_BUCKET" > build.env
       - echo "LAMBDA_S3_KEY=$LAMBDA_S3_KEY" >> build.env
       - echo "build.env file created with S3 location details."
-
   post_build:
     commands:
       - echo "Lambda packaging and upload completed."
@@ -34,10 +32,14 @@ phases:
 artifacts:
   files:
     - lambda.zip
-  discard-paths: yes
-  name: LambdaArtifact
-
+    - build.env
+  name: $(if [ "$CODEBUILD_INITIATOR" = "codepipeline" ]; then echo "LambdaArtifact"; else echo "BuildOutput"; fi)
+  discard-paths: no
   secondary-artifacts:
+    LambdaArtifact:
+      files:
+        - lambda.zip
+      discard-paths: yes
     LambdaS3LocationArtifact:
       files:
         - build.env
