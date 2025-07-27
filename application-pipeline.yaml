@@ -21,29 +21,6 @@ Parameters:
     Description: The ARN of the AWS CodeStar Connections connection to GitHub.
 
 Resources:
-  # S3 Bucket for CodePipeline Artifacts
-  CodePipelineArtifactBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    Properties:
-      BucketName: !Sub "transaction-simulator-pipeline-artifacts-${AWS::Region}-${AWS::AccountId}"
-      VersioningConfiguration:
-        Status: Enabled
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      Tags:
-        - Key: Project
-          Value: TransactionSimulator
-        - Key: Environment
-          Value: PipelineArtifacts
-
   # CodeBuild Projects - Defined in this CodePipeline stack
   FrontendBuildProject:
     Type: AWS::CodeBuild::Project
@@ -71,7 +48,7 @@ Resources:
     Type: AWS::CodeBuild::Project
     Properties:
       Name: !Sub "${AWS::StackName}-CreateLambdaS3Bucket"
-      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      ServiceRole: !ImportValue TransactionSimulatorCodeBuildRoleArn
       Artifacts:
         Type: NO_ARTIFACTS
       Environment:
@@ -89,6 +66,7 @@ Resources:
       Tags:
         - Key: Project
           Value: !Ref 'AWS::StackName'
+
   LambdaPackageProject:
     Type: AWS::CodeBuild::Project
     Properties:
@@ -219,7 +197,7 @@ Resources:
       RoleArn: !ImportValue DevSecOpsCodePipelineServiceRoleArn
       ArtifactStore:
         Type: S3
-        Location: !Ref CodePipelineArtifactBucket
+        Location: !Sub "transaction-simulator-pipeline-artifacts-${AWS::Region}-${AWS::AccountId}"
 
       Stages:
         # 1. Source Stage
@@ -442,7 +420,7 @@ Outputs:
   
   CodePipelineArtifactBucketName:
     Description: Name of the S3 bucket used for pipeline artifacts
-    Value: !Ref CodePipelineArtifactBucket
+    Value: !Sub "transaction-simulator-pipeline-artifacts-${AWS::Region}-${AWS::AccountId}"
     Export:
       Name: TransactionSimulatorPipelineArtifactBucketName
 
