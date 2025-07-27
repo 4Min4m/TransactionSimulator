@@ -6,8 +6,5 @@ phases:
       - export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
       - export LAMBDA_CODE_S3_BUCKET="transaction-simulator-lambda-code-${AWS_ACCOUNT_ID}-${AWS_DEFAULT_REGION}"
       - echo "Attempting to create S3 bucket $LAMBDA_CODE_S3_BUCKET in region $AWS_DEFAULT_REGION"
-      # Use 'aws s3 mb' (make bucket). The '|| true' allows the build to continue if the bucket already exists (idempotent).
       - aws s3 mb s3://${LAMBDA_CODE_S3_BUCKET} --region ${AWS_DEFAULT_REGION} || true
-      # Set ACL if needed (bucket-owner-full-control is often required for cross-account or specific service access)
-      - aws s3api put-bucket-acl --bucket ${LAMBDA_CODE_S3_BUCKET} --acl bucket-owner-full-control || true
       - echo "S3 bucket creation attempt complete."

@@ -4,5 +4,10 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.49.3",
     "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "eslint": "^9.32.0",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0"
   }
 }

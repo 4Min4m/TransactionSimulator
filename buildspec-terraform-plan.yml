@@ -1,35 +1,29 @@
-# buildspec-terraform-plan.yml
 version: 0.2
-
 phases:
   install:
     commands:
       - echo "Installing Terraform..."
-      - wget https://releases.hashicorp.com/terraform/1.7.5/terraform_1.7.5_linux_amd64.zip
-      - unzip terraform_1.7.5_linux_amd64.zip
+      - export TF_VERSION="1.7.5"
+      - wget https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip
+      - unzip -o terraform_${TF_VERSION}_linux_amd64.zip
       - mv terraform /usr/local/bin/
-      - rm terraform_1.7.5_linux_amd64.zip
       - terraform version
-      - echo "Terraform installed."
-
-  pre_build:
-    commands:
-      - echo "Changing directory to terraform/"
       - cd terraform
-      - echo "Sourcing Lambda S3 location variables..."
       - source ../LambdaS3LocationArtifact/build.env
-      - echo "LAMBDA_S3_BUCKET is $LAMBDA_S3_BUCKET"
-      - echo "LAMBDA_S3_KEY is $LAMBDA_S3_KEY"
-      - echo "Initializing Terraform..."
-      - terraform init -backend-config="bucket=transaction-simulator-terraform-tfstate" -backend-config="key=transaction-simulator/terraform.tfstate" -backend-config="region=us-east-1"
+      - echo "LAMBDA_S3_BUCKET=$LAMBDA_S3_BUCKET"
+      - echo "LAMBDA_S3_KEY=$LAMBDA_S3_KEY"
+      - terraform init -backend-config="bucket=$LAMBDA_S3_BUCKET" -backend-config="key=$LAMBDA_S3_KEY" -input=false
 
   build:
     commands:
-      - echo "Generating Terraform plan..."
-      # Pass the S3 bucket and key as Terraform variables
-      - terraform plan -out=tfplan -var="lambda_s3_bucket=$LAMBDA_S3_BUCKET" -var="lambda_s3_key=$LAMBDA_S3_KEY"
+      - terraform plan -out=tfplan.out -input=false
+
+  post_build:
+    commands:
+      - echo "Terraform plan generated."
+      - ls -la tfplan.out
 
 artifacts:
   files:
-    - terraform/tfplan # Ensure the tfplan file is collected as an artifact
-  discard-paths: no # Keep the path so it's collected as 'terraform/tfplan'
+    - terraform/tfplan.out
+  discard-paths: yes
