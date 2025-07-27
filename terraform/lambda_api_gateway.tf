@@ -1,3 +1,4 @@
+# terraform/lambda_api_gateway.tf
 # This file defines the Lambda function and API Gateway for the backend.
 
 # IAM Role for Lambda
@@ -19,19 +20,10 @@ resource "aws_iam_role_policy_attachment" "lambda_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-# REMOVE THIS BLOCK:
-# data "archive_file" "lambda_zip" {
-#   type        = "zip"
-#   source_dir  = "../lambda"
-#   output_path = "lambda.zip"
-# }
-
 # Data source to get the S3 object details for the Lambda code
-data "aws_s3_bucket_object" "lambda_code_object" {
-  bucket = aws_s3_bucket.lambda_code_bucket.bucket
-  key    = var.lambda_s3_key # This will be passed from the pipeline
-  # If you enable versioning on the S3 bucket, you might also use `version_id` here
-  # to force a new Lambda version if only the object version changes, not its content.
+data "aws_s3_object" "lambda_code_object" {
+  bucket = var.lambda_s3_bucket
+  key    = var.lambda_s3_key
 }
 
 # AWS Lambda Function Definition
@@ -43,10 +35,11 @@ resource "aws_lambda_function" "api_lambda" {
   timeout          = 60
   role             = aws_iam_role.lambda_role.arn
   # Use S3 bucket and key instead of local filename
-  s3_bucket        = aws_s3_bucket.lambda_code_bucket.bucket # Reference the bucket created in s3_lambda_code_bucket.tf
-  s3_key           = var.lambda_s3_key # Reference the variable that will be passed from CodePipeline
-  source_code_hash = data.aws_s3_bucket_object.lambda_code_object.etag # Use ETag from S3 object for source_code_hash
+  s3_bucket        = var.lambda_s3_bucket
+  s3_key           = var.lambda_s3_key
+  source_code_hash = data.aws_s3_object.lambda_code_object.etag # Use ETag from S3 object for source_code_hash
   publish          = true
+  
   environment {
     variables = {
       SUPABASE_URL = var.supabase_url
@@ -73,7 +66,6 @@ resource "aws_lambda_alias" "beta_alias" {
   function_version = aws_lambda_function.api_lambda.version # Initially points to the current published version
   description      = "Alias for beta/pre-production testing. Can be used for manual verification."
 }
-
 
 # API Gateway Configuration (pointing to the LIVE alias)
 resource "aws_lambda_permission" "api_gateway" {
@@ -321,8 +313,6 @@ resource "aws_api_gateway_integration_response" "process_batch_options_response"
   ]
 }
 
-
-
 resource "aws_api_gateway_deployment" "api_deployment" {
   depends_on = [
     aws_api_gateway_integration.lambda_integration_login_post,
@@ -342,7 +332,6 @@ resource "aws_api_gateway_deployment" "api_deployment" {
   lifecycle {
     create_before_destroy = true
   }
-
 }
 
 resource "aws_api_gateway_stage" "prod_stage" {
@@ -401,6 +390,28 @@ resource "aws_cloudwatch_log_group" "api_gateway_logs" {
   retention_in_days = 7
 }
 
-output "api_url" {
-  value = "${aws_api_gateway_stage.prod_stage.invoke_url}/api"
+# Outputs
+output "api_gateway_invoke_url" {
+  description = "API Gateway invoke URL"
+  value       = "${aws_api_gateway_stage.prod_stage.invoke_url}/api"
+}
+
+output "lambda_function_name" {
+  description = "Lambda function name"
+  value       = aws_lambda_function.api_lambda.function_name
+}
+
+output "lambda_function_arn" {
+  description = "Lambda function ARN"
+  value       = aws_lambda_function.api_lambda.arn
+}
+
+output "lambda_live_alias_arn" {
+  description = "Lambda LIVE alias ARN"
+  value       = aws_lambda_alias.live_alias.arn
+}
+
+output "api_gateway_rest_api_id" {
+  description = "API Gateway REST API ID"
+  value       = aws_api_gateway_rest_api.api.id
 }

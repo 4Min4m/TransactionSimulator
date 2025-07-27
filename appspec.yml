@@ -3,10 +3,10 @@ Resources:
   - TransactionSimulatorAPI:
       Type: AWS::Lambda::Function
       Properties:
-        Name: TransactionSimulatorAPI
-        Alias: LIVE
-        CurrentVersion: "$LATEST"
-        TargetVersion: "$LATEST"
+        Name: "TransactionSimulatorAPI"
+        Alias: "LIVE"
+        CurrentVersion: "1"
+        TargetVersion: "2"
 Hooks:
-  - BeforeAllowTraffic: "arn:aws:lambda:us-east-1:864981715490:function:TransactionSimulatorAPI"
-  - AfterAllowTraffic: "arn:aws:lambda:us-east-1:864981715490:function:TransactionSimulatorAPI"
+  - BeforeAllowTraffic: "TransactionSimulatorAPIPreTrafficHook"
+  - AfterAllowTraffic: "TransactionSimulatorAPIPostTrafficHook"
