@@ -1,29 +1,143 @@
 version: 0.2
+
+env:
+  variables:
+    TF_VERSION: "1.7.5"
+    TF_PLAN_FILE: "tfplan" # Name of the generated plan file
+    # Ensure any necessary environment variables for AWS credentials or backend configuration are set here
+    # or passed from the CodePipeline.
+
 phases:
   install:
+    runtime-versions:
+      # If you need specific runtimes, define them here.
+      # For Terraform, you typically only need a Linux environment, which CodeBuild provides.
+      # nodejs: 20 # If your Terraform setup depends on Node.js tools, add this.
+      # python: 3.11 # If your Terraform setup depends on Python tools (e.g., for custom scripts), add this.
     commands:
       - echo "Installing Terraform..."
-      - export TF_VERSION="1.7.5"
+      # Removed the TF_VERSION export as it's now in env.variables
+
+      # Create a temporary directory for extraction
+      - mkdir -p /tmp/terraform_install
+      - cd /tmp/terraform_install
+
+      # Download and unzip Terraform into the temporary directory
       - wget https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip
       - unzip -o terraform_${TF_VERSION}_linux_amd64.zip
+
+      # Move the terraform executable to a directory in PATH
       - mv terraform /usr/local/bin/
-      - terraform version
-      - cd terraform
-      - source ../LambdaS3LocationArtifact/build.env
-      - echo "LAMBDA_S3_BUCKET=$LAMBDA_S3_BUCKET"
-      - echo "LAMBDA_S3_KEY=$LAMBDA_S3_KEY"
-      - terraform init -backend-config="bucket=$LAMBDA_S3_BUCKET" -backend-config="key=$LAMBDA_S3_KEY" -input=false
+
+      # Go back to the original source directory
+      - cd $CODEBUILD_SRC_DIR
+
+      - echo "Verifying Terraform installation..."
+      - terraform --version # Verify it's callable and correct version
+
+      - echo "Installing AWS CLI (if not already present and needed for S3 backend)"
+      # AWS CLI v2 is often pre-installed in CodeBuild, but good to ensure if specific commands are used.
+      # Example: pip install awscli --upgrade --user
+      # Or, if you need a specific version:
+      # curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWS_CLI_VERSION}.zip" -o "awscliv2.zip"
+      # unzip awscliv2.zip
+      # sudo ./aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli --overwrite
+      # For now, let's assume it's pre-installed or not strictly needed for basic init/plan with S3 backend
+      # which CodeBuild's execution role will handle.
 
   build:
     commands:
-      - terraform plan -out=tfplan.out -input=false
+      - echo "Initializing Terraform..."
+      # Assuming your Terraform files are in a 'terraform' subdirectory
+      - cd terraform # <--- IMPORTANT: Navigate to your terraform directory
+      - terraform init -backend-config="bucket=${TF_STATE_BUCKET_NAME}" -backend-config="key=${TF_STATE_KEY}" -backend-config="region=${AWS_REGION}" -reconfigure
+      # If your `backend.tf` or `main.tf` explicitly defines the S3 backend, -reconfigure is often useful.
+      # Otherwise, simply `terraform init` might suffice if the backend config is fully in .tf files.
+
+      - echo "Running Terraform plan..."
+      - terraform plan -out=${TF_PLAN_FILE}
 
   post_build:
     commands:
-      - echo "Terraform plan generated."
-      - ls -la tfplan.out
+      - echo "Uploading Terraform plan artifact..."
+      # The plan file is generated in the `terraform` subdirectory.
+      # We need to move it to the CodeBuild artifact output path.
+      - mv ${TF_PLAN_FILE} $CODEBUILD_SRC_DIR/
+      - echo "Terraform plan completed and artifact uploaded."
 
 artifacts:
   files:
-    - terraform/tfplan.out
-  discard-paths: yes
+    - '${TF_PLAN_FILE}'
+  discard-paths: yes # This ensures only the plan file is included, not the whole source dir.
+  name: TerraformPlanArtifact # This name is used in CodePipeline to reference the artifact.version: 0.2
+
+env:
+  variables:
+    TF_VERSION: "1.7.5"
+    TF_PLAN_FILE: "tfplan" # Name of the generated plan file
+    # Ensure any necessary environment variables for AWS credentials or backend configuration are set here
+    # or passed from the CodePipeline.
+
+phases:
+  install:
+    runtime-versions:
+      # If you need specific runtimes, define them here.
+      # For Terraform, you typically only need a Linux environment, which CodeBuild provides.
+      # nodejs: 20 # If your Terraform setup depends on Node.js tools, add this.
+      # python: 3.11 # If your Terraform setup depends on Python tools (e.g., for custom scripts), add this.
+    commands:
+      - echo "Installing Terraform..."
+      # Removed the TF_VERSION export as it's now in env.variables
+
+      # Create a temporary directory for extraction
+      - mkdir -p /tmp/terraform_install
+      - cd /tmp/terraform_install
+
+      # Download and unzip Terraform into the temporary directory
+      - wget https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip
+      - unzip -o terraform_${TF_VERSION}_linux_amd64.zip
+
+      # Move the terraform executable to a directory in PATH
+      - mv terraform /usr/local/bin/
+
+      # Go back to the original source directory
+      - cd $CODEBUILD_SRC_DIR
+
+      - echo "Verifying Terraform installation..."
+      - terraform --version # Verify it's callable and correct version
+
+      - echo "Installing AWS CLI (if not already present and needed for S3 backend)"
+      # AWS CLI v2 is often pre-installed in CodeBuild, but good to ensure if specific commands are used.
+      # Example: pip install awscli --upgrade --user
+      # Or, if you need a specific version:
+      # curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWS_CLI_VERSION}.zip" -o "awscliv2.zip"
+      # unzip awscliv2.zip
+      # sudo ./aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli --overwrite
+      # For now, let's assume it's pre-installed or not strictly needed for basic init/plan with S3 backend
+      # which CodeBuild's execution role will handle.
+
+  build:
+    commands:
+      - echo "Initializing Terraform..."
+      # Assuming your Terraform files are in a 'terraform' subdirectory
+      - cd terraform # <--- IMPORTANT: Navigate to your terraform directory
+      - terraform init -backend-config="bucket=${TF_STATE_BUCKET_NAME}" -backend-config="key=${TF_STATE_KEY}" -backend-config="region=${AWS_REGION}" -reconfigure
+      # If your `backend.tf` or `main.tf` explicitly defines the S3 backend, -reconfigure is often useful.
+      # Otherwise, simply `terraform init` might suffice if the backend config is fully in .tf files.
+
+      - echo "Running Terraform plan..."
+      - terraform plan -out=${TF_PLAN_FILE}
+
+  post_build:
+    commands:
+      - echo "Uploading Terraform plan artifact..."
+      # The plan file is generated in the `terraform` subdirectory.
+      # We need to move it to the CodeBuild artifact output path.
+      - mv ${TF_PLAN_FILE} $CODEBUILD_SRC_DIR/
+      - echo "Terraform plan completed and artifact uploaded."
+
+artifacts:
+  files:
+    - '${TF_PLAN_FILE}'
+  discard-paths: yes # This ensures only the plan file is included, not the whole source dir.
+  name: TerraformPlanArtifact # This name is used in CodePipeline to reference the artifact.
