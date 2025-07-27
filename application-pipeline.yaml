@@ -295,6 +295,7 @@ Resources:
                 Version: '1'
               Configuration:
                 ProjectName: !Ref TerraformPlanProject
+                PrimarySource: SourceOutput 
               InputArtifacts:
                 - Name: SourceOutput
                 - Name: LambdaS3LocationArtifact 
@@ -327,6 +328,7 @@ Resources:
                 Version: '1'
               Configuration:
                 ProjectName: !Ref TerraformApplyProject
+                PrimarySource: SourceOutput
               InputArtifacts:
                 - Name: TerraformPlanArtifact
                 - Name: LambdaS3LocationArtifact
