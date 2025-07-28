@@ -14,7 +14,7 @@ phases:
       - echo "Installing Terraform..."
       - mkdir -p /tmp/terraform_install
       - cd /tmp/terraform_install
-      - wget https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip
+      - wget --tries=5 --timeout=30 https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip
       - unzip -o terraform_${TF_VERSION}_linux_amd64.zip
       - mv terraform /usr/local/bin/
       - cd $CODEBUILD_SRC_DIR
