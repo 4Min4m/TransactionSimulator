@@ -17,37 +17,92 @@ phases:
       - wget --tries=5 --timeout=30 https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip
       - unzip -o terraform_${TF_VERSION}_linux_amd64.zip
       - mv terraform /usr/local/bin/
-      - cd $CODEBUILD_SRC_DIR
+      - cd $CODEBUILD_SRC_DIR # Return to the root of your source directory
       - echo "Verifying Terraform installation..."
       - terraform --version
 
   pre_build:
     commands:
-      - echo "=== ARTIFACT DIAGNOSTICS ==="
-      - echo "CODEBUILD_SRC_DIR=$CODEBUILD_SRC_DIR"
-      - echo "Checking for artifact-specific environment variables:"
-      - env | grep CODEBUILD_SRC_DIR
-      - echo "Contents of main source directory:"
+      - echo "=== COMPREHENSIVE DIAGNOSTICS START ==="
+      - echo "Current working directory:"
+      - pwd
+      - echo "CODEBUILD_SRC_DIR value:"
+      - echo $CODEBUILD_SRC_DIR
+      - echo "CODEBUILD_SRC_DIR_LambdaS3LocationArtifact value (crucial for input artifact location):"
+      - echo $CODEBUILD_SRC_DIR_LambdaS3LocationArtifact
+      - echo "Contents of CODEBUILD_SRC_DIR (your main source code):"
       - ls -la $CODEBUILD_SRC_DIR
-      - echo "Checking artifact directory:"
-      - |
-        if [ ! -z "$CODEBUILD_SRC_DIR_LambdaS3LocationArtifact" ]; then
-          echo "LambdaS3LocationArtifact directory: $CODEBUILD_SRC_DIR_LambdaS3LocationArtifact";
-          ls -la $CODEBUILD_SRC_DIR_LambdaS3LocationArtifact;
-        else
-          echo "CODEBUILD_SRC_DIR_LambdaS3LocationArtifact not set";
-        fi
+      - echo "Recursive listing of CODEBUILD_SRC_DIR (your main source code):"
+      - ls -laR $CODEBUILD_SRC_DIR
+      - echo "Contents of CODEBUILD_SRC_DIR_LambdaS3LocationArtifact (where input artifact should be unpacked):"
+      - ls -la $CODEBUILD_SRC_DIR_LambdaS3LocationArtifact || echo "Directory not found or empty."
+      - echo "Recursive listing of CODEBUILD_SRC_DIR_LambdaS3LocationArtifact:"
+      - ls -laR $CODEBUILD_SRC_DIR_LambdaS3LocationArtifact || echo "Directory not found or empty."
+      - echo "Environment variables (filtered for CODEBUILD/ARTIFACT):"
+      - env | grep -E "(CODEBUILD|ARTIFACT)" || echo "No CODEBUILD/ARTIFACT env vars found"
+      - echo "Checking for common artifact locations (relative to CODEBUILD_SRC_DIR):"
+      - for dir in LambdaS3LocationArtifact LambdaPackageArtifact SourceOutput; do
+          echo "Checking for directory: $dir (relative to $CODEBUILD_SRC_DIR)"
+          if [ -d "$dir" ]; then
+            echo "  Directory $dir exists:"
+            ls -la "$dir/"
+            if [ -f "$dir/build.env" ]; then
+              echo "  build.env found in $dir (relative path):"
+              cat "$dir/build.env"
+            else
+              echo "  build.env NOT found in $dir (relative path)"
+            fi
+          else
+            echo "  Directory $dir does not exist (relative path)"
+          fi
+        done
+      - echo "Searching for build.env anywhere in the workspace:"
+      - find /codebuild -name "build.env" -type f 2>/dev/null || echo "No build.env files found anywhere"
+      - echo "=== COMPREHENSIVE DIAGNOSTICS END ==="
 
   build:
     commands:
       - echo "Loading Lambda S3 location from previous stage..."
-      - echo "Using artifact directory $CODEBUILD_SRC_DIR_LambdaS3LocationArtifact"
-      - source $CODEBUILD_SRC_DIR_LambdaS3LocationArtifact/build.env
+
+      # Try multiple potential locations for the build.env file, prioritizing the explicit CODEBUILD_SRC_DIR_LambdaS3LocationArtifact path
+      - |
+        BUILD_ENV_FOUND=false
+        # Prioritize the absolute path provided by CodeBuild for the input artifact
+        for artifact_path in "$CODEBUILD_SRC_DIR_LambdaS3LocationArtifact" \
+                             "$CODEBUILD_SRC_DIR/LambdaS3LocationArtifact" \
+                             "$CODEBUILD_SRC_DIR/LambdaPackageArtifact"; do
+          if [ -f "$artifact_path/build.env" ]; then
+            echo "Found build.env in $artifact_path, sourcing it..."
+            . "$artifact_path/build.env"
+            BUILD_ENV_FOUND=true
+            break
+          else
+            echo "build.env not found in $artifact_path"
+          fi
+        done
+
+        if [ "$BUILD_ENV_FOUND" = "false" ]; then
+          echo "ERROR: build.env not found in any expected location after trying common paths."
+          echo "Searching entire /codebuild workspace for build.env as a last resort:"
+          find /codebuild -name "build.env" -type f 2>/dev/null || echo "No build.env files found anywhere in /codebuild"
+          exit 1
+        fi
+
       - echo "LAMBDA_S3_BUCKET=$LAMBDA_S3_BUCKET"
       - echo "LAMBDA_S3_KEY=$LAMBDA_S3_KEY"
+
+      - |
+        if [ -z "$LAMBDA_S3_BUCKET" ] || [ -z "$LAMBDA_S3_KEY" ]; then
+          echo "ERROR: Required environment variables not set even after sourcing build.env"
+          echo "LAMBDA_S3_BUCKET: '$LAMBDA_S3_BUCKET'"
+          echo "LAMBDA_S3_KEY: '$LAMBDA_S3_KEY'"
+          exit 1
+        fi
+
       - echo "Initializing Terraform..."
       - cd terraform
       - terraform init -reconfigure
+
       - echo "Running Terraform plan..."
       - terraform plan -var="lambda_s3_bucket=${LAMBDA_S3_BUCKET}" -var="lambda_s3_key=${LAMBDA_S3_KEY}" -out=${TF_PLAN_FILE}
 
