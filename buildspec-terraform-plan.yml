@@ -49,7 +49,7 @@ phases:
           else
             echo "  Directory $dir does not exist"
           fi
-      done
+        done
       - echo "Searching for build.env anywhere in the workspace:"
       - find $CODEBUILD_SRC_DIR -name "build.env" -type f 2>/dev/null || echo "No build.env files found"
       - echo "=== COMPREHENSIVE DIAGNOSTICS END ==="
@@ -57,8 +57,9 @@ phases:
   build:
     commands:
       - echo "Loading Lambda S3 location from previous stage..."
-      
-      # Try multiple potential locations for the build.env file
+
+      # This is the multi-line script block
+      # Ensure all lines starting from 'BUILD_ENV_FOUND=false' are indented by 4 spaces
       - |
         BUILD_ENV_FOUND=false
         for artifact_dir in LambdaS3LocationArtifact LambdaPackageArtifact; do
@@ -72,7 +73,7 @@ phases:
             echo "build.env not found in $artifact_dir"
           fi
         done
-        
+        # Ensure the 'if' block here is also correctly indented relative to the '|'
         if [ "$BUILD_ENV_FOUND" = "false" ]; then
           echo "ERROR: build.env not found in any expected location"
           echo "Searching entire workspace for build.env:"
@@ -80,10 +81,11 @@ phases:
           exit 1
         fi
 
+      # These commands should be separate list items under 'commands:'
       - echo "LAMBDA_S3_BUCKET=$LAMBDA_S3_BUCKET"
       - echo "LAMBDA_S3_KEY=$LAMBDA_S3_KEY"
-      
-      # Verify the variables are actually set
+
+      # This is another multi-line script block for verification
       - |
         if [ -z "$LAMBDA_S3_BUCKET" ] || [ -z "$LAMBDA_S3_KEY" ]; then
           echo "ERROR: Required environment variables not set"
