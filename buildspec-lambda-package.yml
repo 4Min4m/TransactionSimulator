@@ -6,7 +6,7 @@ phases:
       nodejs: 20
     commands:
       - echo "Installing Node.js version 20 ..."
-      - n $NODE_20_VERSION # Assuming 'n' is available or installed in your build image
+      - n $NODE_20_VERSION
       - echo "Installing dependencies for Lambda function..."
       - cd lambda
       - npm install
@@ -22,47 +22,37 @@ phases:
       - export LAMBDA_S3_KEY="lambda-packages/lambda-${CODEBUILD_RESOLVED_SOURCE_VERSION}.zip"
       - echo "Lambda S3 Key $LAMBDA_S3_KEY"
       - echo "Uploading lambda.zip to S3..."
-      # You're already uploading lambda.zip to S3 here. This is good for direct storage.
       - aws s3 cp lambda.zip "s3://${LAMBDA_CODE_S3_BUCKET}/${LAMBDA_S3_KEY}" --metadata-directive REPLACE --acl bucket-owner-full-control --sse AES256
       - echo "Lambda.zip uploaded to S3."
-      # Create build.env at the root of the current working directory ($CODEBUILD_SRC_DIR)
       - echo "LAMBDA_S3_BUCKET=$LAMBDA_CODE_S3_BUCKET" > build.env
       - echo "LAMBDA_S3_KEY=$LAMBDA_S3_KEY" >> build.env
       - echo "build.env file created with S3 location details."
   post_build:
     commands:
       - echo "Lambda packaging and upload completed."
-      - ls -la build.env # Verify build.env exists locally
+      - echo "--- Checking build.env location and content ---"
+      - ls -la build.env # Confirm build.env exists at root
+      - cat build.env # Display its content
+      - echo "--- End checking build.env ---"
       - echo "Contents of current directory before artifact packaging:" # DIAGNOSTIC
       - ls -laR $CODEBUILD_SRC_DIR # DIAGNOSTIC: List everything recursively from the source dir
       - echo "End of diagnostic ls -laR" # DIAGNOSTIC
 
 artifacts:
-  # Primary artifact: This is often the main artifact.
-  # If CodePipeline expects a *primary* output named 'LambdaArtifact', this is it.
-  # We should only include lambda.zip here to avoid ambiguity with build.env.
   files:
     - lambda.zip
   name: $(if [ "$CODEBUILD_INITIATOR" = "codepipeline" ]; then echo "LambdaArtifact"; else echo "BuildOutput"; fi)
-  discard-paths: no # Keep original path for lambda.zip within the primary artifact
-
+  discard-paths: no
   secondary-artifacts:
-    # REINSTATED: This secondary artifact is required because your CodePipeline
-    # setup is explicitly looking for a secondary artifact named "LambdaArtifact".
-    # This will likely contain a copy of lambda.zip.
-    LambdaArtifact: # The YAML key/identifier for this secondary artifact
+    LambdaArtifact:
       files:
         - lambda.zip
-      discard-paths: yes # Places lambda.zip at the root of THIS specific secondary artifact
-      # No 'name' field here means its name defaults to its key: 'LambdaArtifact'
-
-    # This is the secondary artifact specifically for build.env,
-    # which is consumed by your Terraform stages.
-    LambdaS3LocationArtifact: # The YAML key/identifier for this secondary artifact
+      discard-paths: yes
+    LambdaS3LocationArtifact:
       files:
         - build.env
-      discard-paths: yes # Places build.env at the root of THIS specific secondary artifact
-      name: LambdaPackageArtifact # This is the name CodePipeline will use for it
+      discard-paths: yes
+      name: LambdaPackageArtifact
 cache:
   paths:
     - 'lambda/node_modules/**'
