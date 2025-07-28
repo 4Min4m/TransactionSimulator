@@ -2,10 +2,10 @@ version: 0.2
 
 phases:
   install:
+    runtime-versions:
+      nodejs: 20
     commands:
       - echo "Installing Node.js version 20 ..."
-      - n $NODE_20_VERSION
-      - echo "Installing dependencies for Lambda function..."
       - cd lambda
       - npm install
       - echo "Dependencies installed."
@@ -29,23 +29,21 @@ phases:
     commands:
       - echo "Lambda packaging and upload completed."
       - ls -la build.env
+      - echo "Contents of current directory before artifact packaging:"
+      - ls -laR $CODEBUILD_SRC_DIR
+      - echo "End of diagnostic ls -laR"
 
 artifacts:
   files:
     - lambda.zip
-    - build.env
-  name: $(if [ "$CODEBUILD_INITIATOR" = "codepipeline" ]; then echo "LambdaArtifact"; else echo "BuildOutput"; fi)
-  discard-paths: no
+  name: LambdaCodeArtifact
+  discard-paths: yes
   secondary-artifacts:
-    LambdaArtifact:
-      files:
-        - lambda.zip
-      discard-paths: yes
     LambdaS3LocationArtifact:
       files:
         - build.env
       discard-paths: yes
-      name: LambdaPackageArtifact 
+      name: LambdaPackageArtifact
 cache:
   paths:
     - 'lambda/node_modules/**'
