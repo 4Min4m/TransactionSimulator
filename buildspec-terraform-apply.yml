@@ -3,9 +3,6 @@ version: 0.2
 env:
   variables:
     TF_VERSION: "1.7.5"
-    # TF_VAR_supabase_url and TF_VAR_supabase_key are assumed to be set
-    # as environment variables in your CodeBuild project settings (or passed by CodePipeline)
-    # and will be automatically picked up by Terraform.
 
 phases:
   install:
@@ -19,36 +16,30 @@ phases:
       - wget https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip
       - unzip -o terraform_${TF_VERSION}_linux_amd64.zip
       - mv terraform /usr/local/bin/
-      - cd $CODEBUILD_SRC_DIR # Return to the root of your source directory
-      - terraform version # Verify Terraform installation
+      - cd $CODEBUILD_SRC_DIR
+      - terraform version
 
       - echo "Loading Lambda S3 location from previous stage..."
-      # This command sources the build.env file from the LambdaS3LocationArtifact,
-      # making LAMBDA_S3_BUCKET and LAMBDA_S3_KEY available as environment variables.
-      - source LambdaS3LocationArtifact/build.env
+      - . LambdaS3LocationArtifact/build.env
       - echo "LAMBDA_S3_BUCKET=$LAMBDA_S3_BUCKET"
       - echo "LAMBDA_S3_KEY=$LAMBDA_S3_KEY"
 
-      - echo "Initializing Terraform..."
-      - cd terraform # Navigate into your Terraform configuration directory
-      # Now that backend is defined in backend.tf, we just need to init.
-      # -input=false prevents interactive prompts.
-      - terraform init -input=false -reconfigure
-
   build:
     commands:
+      - echo "Initializing Terraform..."
+      - cd terraform
+      - terraform init -input=false -reconfigure
+
       - echo "Applying Terraform plan..."
-      # The tfplan artifact from the previous stage is available at ../TerraformPlanArtifact/tfplan
       - terraform apply -auto-approve ../TerraformPlanArtifact/tfplan -input=false
 
   post_build:
     commands:
       - echo "Generating Terraform outputs..."
-      # Generate outputs and redirect to a JSON file at the root of the CodeBuild workspace
       - terraform output -json > ../terraform_outputs.json
       - echo "Terraform apply completed."
 
 artifacts:
   files:
-    - 'terraform_outputs.json' # The output file is now at the root of the artifact
-  name: TerraformOutputsArtifact # Name of the artifact for CodePipeline
+    - 'terraform_outputs.json'
+  name: TerraformOutputsArtifact
