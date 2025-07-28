@@ -17,19 +17,20 @@ phases:
       - wget https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip
       - unzip -o terraform_${TF_VERSION}_linux_amd64.zip
       - mv terraform /usr/local/bin/
-      - cd $CODEBUILD_SRC_DIR
+      - cd $CODEBUILD_SRC_DIR # Return to the root of your source directory
       - echo "Verifying Terraform installation..."
       - terraform --version
 
   build:
     commands:
       - echo "Loading Lambda S3 location from previous stage..."
-      - . LambdaPackageArtifact/build.env
+      # CRITICAL CHANGE: Use LambdaS3LocationArtifact as the directory name
+      - . LambdaS3LocationArtifact/build.env
       - echo "LAMBDA_S3_BUCKET=$LAMBDA_S3_BUCKET"
       - echo "LAMBDA_S3_KEY=$LAMBDA_S3_KEY"
 
       - echo "Initializing Terraform..."
-      - cd terraform
+      - cd terraform # Navigate into your Terraform configuration directory
       - terraform init -reconfigure
 
       - echo "Running Terraform plan..."
