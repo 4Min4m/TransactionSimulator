@@ -24,7 +24,7 @@ phases:
   build:
     commands:
       - echo "Loading Lambda S3 location from previous stage..."
-      - . LambdaS3LocationArtifact/build.env
+      - . LambdaPackageArtifact/build.env
       - echo "LAMBDA_S3_BUCKET=$LAMBDA_S3_BUCKET"
       - echo "LAMBDA_S3_KEY=$LAMBDA_S3_KEY"
 

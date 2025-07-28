@@ -45,6 +45,7 @@ artifacts:
       files:
         - build.env
       discard-paths: yes
+      name: LambdaPackageArtifact 
 cache:
   paths:
     - 'lambda/node_modules/**'
