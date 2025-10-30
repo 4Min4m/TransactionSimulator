@@ -61,10 +61,3 @@ out/
 # Logs
 logs/
 *.log
-
-# Python (اگر هنوز نیاز دارید)
-venv/
-**/__pycache__/
-*.pyc
-*.pyo
-*.pyd
