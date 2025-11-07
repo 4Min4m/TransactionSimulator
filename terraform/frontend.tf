@@ -73,9 +73,3 @@ resource "aws_s3_bucket_cors_configuration" "frontend_cors" {
     max_age_seconds = 3000
   }
 }
-
-#frontend_website_url
-output "frontend_website_url_output" {
-  description = "The URL of the S3 static website"
-  value       = aws_s3_bucket_website_configuration.frontend_website.website_endpoint
-}

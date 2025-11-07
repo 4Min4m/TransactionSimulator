@@ -1,0 +1,307 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  TERRAFORM_VERSION: 1.7.5
+  NODE_VERSION: '20'
+  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+  SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+  AB_TRAFFIC_WEIGHT: '0.5'
+
+jobs:
+  terraform-plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    env:
+      TF_VAR_supabase_url: ${{ env.SUPABASE_URL }}
+      TF_VAR_supabase_key: ${{ env.SUPABASE_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: |
+            frontend/package-lock.json
+            lambda/package-lock.json
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Install Lambda dependencies
+        working-directory: lambda
+        run: npm ci
+
+      - name: Terraform init
+        working-directory: terraform
+        run: terraform init -input=false -reconfigure
+
+      - name: Terraform validate
+        working-directory: terraform
+        run: terraform validate
+
+      - name: Terraform plan
+        working-directory: terraform
+        run: terraform plan -input=false -out=tfplan
+
+      - name: Capture current Lambda alias versions
+        id: snapshot-aliases
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          FUNCTION_NAME="TransactionSimulatorAPI"
+          LIVE_VERSION=$(aws lambda get-alias --function-name "$FUNCTION_NAME" --name LIVE --query 'FunctionVersion' --output text 2>/dev/null || true)
+          BETA_VERSION=$(aws lambda get-alias --function-name "$FUNCTION_NAME" --name BETA --query 'FunctionVersion' --output text 2>/dev/null || true)
+          cat <<JSON > artifacts/lambda_alias_versions.json
+          {
+            "function_name": "$FUNCTION_NAME",
+            "live_version": "${LIVE_VERSION:-}",
+            "beta_version": "${BETA_VERSION:-}"
+          }
+          JSON
+
+      - name: Upload Terraform plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan
+          path: terraform/tfplan
+
+      - name: Upload alias snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: pre-deploy-alias-snapshot
+          path: artifacts/lambda_alias_versions.json
+
+  manual-approval:
+    name: Await Manual Approval
+    runs-on: ubuntu-latest
+    needs: terraform-plan
+    environment:
+      name: production
+    steps:
+      - name: Approval required
+        run: echo "Approve this job in the production environment to continue."
+
+  terraform-apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    needs: manual-approval
+    env:
+      TF_VAR_supabase_url: ${{ env.SUPABASE_URL }}
+      TF_VAR_supabase_key: ${{ env.SUPABASE_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: |
+            frontend/package-lock.json
+            lambda/package-lock.json
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Install Lambda dependencies
+        working-directory: lambda
+        run: npm ci
+
+      - name: Terraform init
+        working-directory: terraform
+        run: terraform init -input=false -reconfigure
+
+      - name: Terraform apply
+        working-directory: terraform
+        run: terraform apply -input=false -auto-approve
+
+      - name: Capture Terraform outputs
+        working-directory: terraform
+        run: terraform output -json > ../terraform_outputs.json
+
+      - name: Upload Terraform outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-outputs
+          path: terraform_outputs.json
+
+  lambda-ab-test:
+    name: Configure Lambda A/B Routing
+    runs-on: ubuntu-latest
+    needs: terraform-apply
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Download Terraform outputs
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-outputs
+          path: artifacts
+
+      - name: Download alias snapshot
+        uses: actions/download-artifact@v4
+        with:
+          name: pre-deploy-alias-snapshot
+          path: artifacts
+
+      - name: Install jq
+        run: sudo apt-get update -y && sudo apt-get install -y jq
+
+      - name: Configure traffic weights
+        env:
+          ROUTING_WEIGHT: ${{ env.AB_TRAFFIC_WEIGHT }}
+        run: |
+          set -euo pipefail
+          SNAPSHOT_FILE="artifacts/lambda_alias_versions.json"
+          OUTPUT_FILE="artifacts/terraform_outputs.json"
+
+          if [ ! -f "$SNAPSHOT_FILE" ]; then
+            echo "Alias snapshot not found; skipping A/B configuration."
+            exit 0
+          fi
+
+          PREVIOUS_VERSION=$(jq -r '.live_version // ""' "$SNAPSHOT_FILE")
+          FUNCTION_NAME=$(jq -r '.lambda_function_name.value // ""' "$OUTPUT_FILE")
+
+          if [ -z "$FUNCTION_NAME" ] || [ "$FUNCTION_NAME" = "null" ]; then
+            echo "Unable to determine Lambda function name; skipping A/B configuration." >&2
+            exit 1
+          fi
+
+          if [ -z "$PREVIOUS_VERSION" ] || [ "$PREVIOUS_VERSION" = "None" ]; then
+            echo "No previous live version recorded; skipping A/B configuration."
+            exit 0
+          fi
+
+          NEW_VERSION=$(aws lambda get-alias --function-name "$FUNCTION_NAME" --name BETA --query 'FunctionVersion' --output text)
+
+          if [ -z "$NEW_VERSION" ] || [ "$NEW_VERSION" = "None" ]; then
+            echo "Unable to determine beta alias version; skipping A/B configuration."
+            exit 0
+          fi
+
+          if [ "$PREVIOUS_VERSION" = "$NEW_VERSION" ]; then
+            echo "Live and beta versions match; nothing to route."
+            exit 0
+          fi
+
+          echo "Routing $(echo "$ROUTING_WEIGHT" | awk '{printf "%s%%", $1*100}') of traffic to version $NEW_VERSION while keeping version $PREVIOUS_VERSION as primary."
+
+          aws lambda update-alias \
+            --function-name "$FUNCTION_NAME" \
+            --name LIVE \
+            --function-version "$PREVIOUS_VERSION"
+
+          aws lambda update-alias \
+            --function-name "$FUNCTION_NAME" \
+            --name LIVE \
+            --routing-config "AdditionalVersionWeights={\"$NEW_VERSION\"=$ROUTING_WEIGHT}"
+
+  smoke-tests:
+    name: Smoke Tests
+    runs-on: ubuntu-latest
+    needs: lambda-ab-test
+    steps:
+      - name: Download Terraform outputs
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-outputs
+          path: artifacts
+
+      - name: Install curl and jq
+        run: sudo apt-get update -y && sudo apt-get install -y curl jq
+
+      - name: Run smoke tests
+        env:
+          TERRAFORM_OUTPUTS: artifacts/terraform_outputs.json
+        run: |
+          set -euo pipefail
+          API_URL=$(jq -r '.api_gateway_invoke_url.value // ""' "$TERRAFORM_OUTPUTS")
+          FRONTEND_URL=$(jq -r '.frontend_website_url.value // ""' "$TERRAFORM_OUTPUTS")
+
+          if [ -z "$API_URL" ] || [ "$API_URL" = "null" ]; then
+            echo "ERROR: API_URL is empty." >&2
+            exit 1
+          fi
+
+          if [ -z "$FRONTEND_URL" ] || [ "$FRONTEND_URL" = "null" ]; then
+            echo "ERROR: FRONTEND_URL is empty." >&2
+            exit 1
+          fi
+
+          echo "Testing backend login endpoint at ${API_URL}/login"
+          API_STATUS=$(curl -sS -o api_response.json -w '%{http_code}' \
+            -X POST "$API_URL/login" \
+            -H 'Content-Type: application/json' \
+            -d '{"username":"admin","password":"password123"}')
+
+          if [ "$API_STATUS" -ne 200 ]; then
+            echo "Login endpoint returned status $API_STATUS" >&2
+            cat api_response.json >&2 || true
+            exit 1
+          fi
+
+          jq -e '.success == true' api_response.json >/dev/null
+
+          echo "Testing frontend availability at $FRONTEND_URL"
+          FRONTEND_STATUS=$(curl -sS -o frontend_response.html -w '%{http_code}' "$FRONTEND_URL")
+
+          if [ "$FRONTEND_STATUS" -ge 400 ]; then
+            echo "Frontend returned status $FRONTEND_STATUS" >&2
+            cat frontend_response.html >&2 || true
+            exit 1
+          fi
+
+          grep -q "Payment Simulator" frontend_response.html
+
+          echo "Smoke tests completed successfully."

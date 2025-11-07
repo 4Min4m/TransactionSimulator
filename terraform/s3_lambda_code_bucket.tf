@@ -5,7 +5,7 @@ data "aws_region" "current" {}
 # Create or reference the S3 bucket for Lambda code
 resource "aws_s3_bucket" "lambda_code_bucket" {
   bucket = "transaction-simulator-lambda-code-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.name}"
-  
+
   tags = {
     Name        = "TransactionSimulatorLambdaCode"
     Project     = "TransactionSimulator"
@@ -37,12 +37,30 @@ resource "aws_s3_bucket_public_access_block" "lambda_code_bucket_pab" {
 # Bucket versioning for Lambda code bucket
 resource "aws_s3_bucket_versioning" "lambda_code_bucket_versioning" {
   bucket = aws_s3_bucket.lambda_code_bucket.id
+
   versioning_configuration {
     status = "Enabled"
   }
 }
 
-# Output the bucket name for use in other resources
+# Package the Lambda function code from the local directory
+# Ensure the GitHub Actions workflow installs dependencies before running Terraform
+# so that node_modules are included in the archive when necessary.
+data "archive_file" "lambda_zip" {
+  type        = "zip"
+  source_dir  = "${path.module}/../lambda"
+  output_path = "${path.module}/.terraform/lambda.zip"
+}
+
+# Upload the packaged Lambda artifact to the managed bucket
+resource "aws_s3_object" "lambda_package" {
+  bucket = aws_s3_bucket.lambda_code_bucket.id
+  key    = "lambda-packages/${data.archive_file.lambda_zip.output_sha}.zip"
+  source = data.archive_file.lambda_zip.output_path
+  etag   = filemd5(data.archive_file.lambda_zip.output_path)
+}
+
+# Output the bucket name and key for reference
 output "lambda_code_bucket_name" {
   description = "Name of the S3 bucket storing Lambda deployment packages."
   value       = aws_s3_bucket.lambda_code_bucket.bucket
@@ -51,4 +69,9 @@ output "lambda_code_bucket_name" {
 output "lambda_code_bucket_arn" {
   description = "ARN of the S3 bucket storing Lambda deployment packages."
   value       = aws_s3_bucket.lambda_code_bucket.arn
+}
+
+output "lambda_package_key" {
+  description = "Key of the Lambda package uploaded to S3."
+  value       = aws_s3_object.lambda_package.key
 }
