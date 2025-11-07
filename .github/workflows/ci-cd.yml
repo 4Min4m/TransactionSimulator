@@ -50,7 +50,12 @@ jobs:
 
       - name: Install frontend dependencies
         working-directory: frontend
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
 
       - name: Build frontend
         working-directory: frontend
@@ -58,7 +63,12 @@ jobs:
 
       - name: Install Lambda dependencies
         working-directory: lambda
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
 
       - name: Terraform init
         working-directory: terraform
@@ -143,7 +153,12 @@ jobs:
 
       - name: Install frontend dependencies
         working-directory: frontend
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
 
       - name: Build frontend
         working-directory: frontend
@@ -151,7 +166,12 @@ jobs:
 
       - name: Install Lambda dependencies
         working-directory: lambda
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
 
       - name: Terraform init
         working-directory: terraform
@@ -240,11 +260,7 @@ jobs:
           aws lambda update-alias \
             --function-name "$FUNCTION_NAME" \
             --name LIVE \
-            --function-version "$PREVIOUS_VERSION"
-
-          aws lambda update-alias \
-            --function-name "$FUNCTION_NAME" \
-            --name LIVE \
+            --function-version "$PREVIOUS_VERSION" \
             --routing-config "AdditionalVersionWeights={\"$NEW_VERSION\"=$ROUTING_WEIGHT}"
 
   smoke-tests:
@@ -279,9 +295,11 @@ jobs:
             exit 1
           fi
 
-          echo "Testing backend login endpoint at ${API_URL}/login"
+          LOGIN_ENDPOINT="${API_URL%/}/api/login"
+
+          echo "Testing backend login endpoint at ${LOGIN_ENDPOINT}"
           API_STATUS=$(curl -sS -o api_response.json -w '%{http_code}' \
-            -X POST "$API_URL/login" \
+            -X POST "$LOGIN_ENDPOINT" \
             -H 'Content-Type: application/json' \
             -d '{"username":"admin","password":"password123"}')
 

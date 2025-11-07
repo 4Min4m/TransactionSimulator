@@ -390,28 +390,3 @@ resource "aws_cloudwatch_log_group" "api_gateway_logs" {
   retention_in_days = 7
 }
 
-# Outputs
-output "api_gateway_invoke_url" {
-  description = "API Gateway invoke URL"
-  value       = "${aws_api_gateway_stage.prod_stage.invoke_url}/api"
-}
-
-output "lambda_function_name" {
-  description = "Lambda function name"
-  value       = aws_lambda_function.api_lambda.function_name
-}
-
-output "lambda_function_arn" {
-  description = "Lambda function ARN"
-  value       = aws_lambda_function.api_lambda.arn
-}
-
-output "lambda_live_alias_arn" {
-  description = "Lambda LIVE alias ARN"
-  value       = aws_lambda_alias.live_alias.arn
-}
-
-output "api_gateway_rest_api_id" {
-  description = "API Gateway REST API ID"
-  value       = aws_api_gateway_rest_api.api.id
-}
