@@ -10,6 +10,7 @@ yarn-error.log*
 # TypeScript
 *.tsbuildinfo
 dist/
+**/dist/
 **/*.js.map
 **/*.d.ts
 

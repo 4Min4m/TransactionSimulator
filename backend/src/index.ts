@@ -10,12 +10,12 @@ import authRoutes from "./routes/authRoutes";
 import { errorHandler } from "./middleware/errorHandler";
 import { typeDefs, resolvers } from "./graphql/schema";
 
-// لود متغیرهای محیطی
+// Load environment variables
 dotenv.config({ path: "./.env" });
 
 const app = express();
 
-// تنظیمات CORS
+// Configure CORS
 app.use(
   cors({
     origin: "*",

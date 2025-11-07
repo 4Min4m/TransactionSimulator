@@ -39,7 +39,7 @@ A robust payment transaction simulator designed to test and demonstrate payment 
 - **Icons**: Lucide React
 - **Database**: Supabase
 - **Build Tool**: Vite
-- **Backend**: FastAPI (Python)
+- **Backend**: Express.js with Apollo Server (TypeScript)
 - **Deployment**: Render
 - **Containerization**: Docker
 
@@ -49,7 +49,7 @@ A robust payment transaction simulator designed to test and demonstrate payment 
 
 ### **Prerequisites**
 - Node.js (v18 or higher)
-- Python (v3.9 or higher)
+- npm (comes with Node.js)
 - Docker (optional)
 
 ### **Steps to Run Locally**
@@ -67,7 +67,7 @@ A robust payment transaction simulator designed to test and demonstrate payment 
 
    # Backend
    cd ../backend
-   pip install -r requirements.txt
+   npm install
    ```
 
 3. Set up environment variables:
@@ -86,7 +86,7 @@ A robust payment transaction simulator designed to test and demonstrate payment 
    - **Backend**:
      ```bash
      cd backend
-     uvicorn app.main:app --reload
+     npm run dev
      ```
 
 5. Open your browser and navigate to `http://localhost:5173`.
@@ -189,7 +189,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Built with [Supabase](https://supabase.com) for real-time database capabilities
 - UI components powered by [Tailwind CSS](https://tailwindcss.com)
 - Icons provided by [Lucide](https://lucide.dev)
-- Backend powered by [FastAPI](https://fastapi.tiangolo.com)
+- Backend powered by [Express.js](https://expressjs.com/) and [Apollo Server](https://www.apollographql.com/docs/apollo-server/)
 
 ---
 
@@ -285,4 +285,4 @@ Join the discussion and share your feedback:
 
 ---
 
-**#PaymentSimulator #FastAPI #ReactJS #Supabase #Docker #Render #DevOps #OpenSource #FinTech #PaymentProcessing #LoadTesting #TransactionSimulation**
+**#PaymentSimulator #ExpressJS #ReactJS #Supabase #Docker #Render #DevOps #OpenSource #FinTech #PaymentProcessing #LoadTesting #TransactionSimulation**
