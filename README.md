@@ -40,7 +40,7 @@ A robust payment transaction simulator designed to test and demonstrate payment 
 - **Database**: Supabase
 - **Build Tool**: Vite
 - **Backend**: Express.js with Apollo Server (TypeScript)
-- **Deployment**: Render
+- **Deployment**: AWS (Terraform + GitHub Actions)
 - **Containerization**: Docker
 
 ---
@@ -203,8 +203,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📊 **Infrastructure and Deployment**
 
 ### **Production Environment**
-- **Frontend Hosting**: Render
-- **Backend Hosting**: Render
+- **Frontend Hosting**: Amazon S3 static website
+- **Backend Hosting**: AWS Lambda behind API Gateway
+- **Infrastructure as Code**: Terraform
+- **CI/CD**: GitHub Actions (manual approval + smoke tests)
 - **Database**: Supabase
 
 ### **Environment Variables**

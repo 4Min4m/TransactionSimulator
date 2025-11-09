@@ -19,21 +19,19 @@ output "frontend_bucket_name" {
   sensitive   = false
 }
 
-# Output the Lambda Function Name for CodePipeline/CodeDeploy reference
+# Output the Lambda Function Name for reference
 output "lambda_function_name" {
-  description = "The name of the Lambda function for CodeDeploy."
+  description = "The name of the Lambda function"
   value       = aws_lambda_function.api_lambda.function_name
-  # This export name should match what CodePipeline expects
-  # For cross-stack references, this output can be imported as "TransactionSimulatorLambdaFunctionName"
 }
 
 # Ensure these are also outputs if you want them visible/importable
- output "lambda_live_alias_arn" {
-   description = "The ARN of the Lambda LIVE alias"
-   value       = aws_lambda_alias.live_alias.arn
- }
+output "lambda_live_alias_arn" {
+  description = "The ARN of the Lambda LIVE alias"
+  value       = aws_lambda_alias.live_alias.arn
+}
 
- output "lambda_beta_alias_arn" {
-   description = "The ARN of the Lambda BETA alias"
-   value       = aws_lambda_alias.beta_alias.arn
- }
+output "lambda_beta_alias_arn" {
+  description = "The ARN of the Lambda BETA alias"
+  value       = aws_lambda_alias.beta_alias.arn
+}
