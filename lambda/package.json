@@ -1,0 +1,14 @@
+{
+  "name": "lambda-function",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.600.0",
+    "@aws-sdk/client-sqs": "^3.600.0",
+    "@supabase/supabase-js": "^2.49.3",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2"
+  }
+}
