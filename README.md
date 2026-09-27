@@ -437,9 +437,3 @@ user management, without rewriting the API surface:
 Because auth is already enforced at the API Gateway edge behind a single
 authorizer, only that authorizer and the login endpoint change; every
 protected route stays untouched.
-
----
-
-## License
-
-MIT (or your preferred license).
