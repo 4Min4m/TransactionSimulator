@@ -37,7 +37,8 @@ real money.
 - **CI/CD** — GitHub Actions with OIDC (no static AWS keys), automated tests,
   IaC security scanning, a manual approval gate, and a blue/green Lambda
   rollout that validates the new version against **no real traffic** before
-  shifting any, then canaries, smoke-tests, and finally promotes to 100%.
+  shifting any, then an **AWS CodeDeploy** Lambda canary (10%/5min) that
+  auto-rolls-back on CloudWatch alarms, and a post-deploy smoke test.
 
 ---
 
@@ -131,12 +132,13 @@ polls `GET /api/batches/{id}` for status.
 │   ├── waf.tf           # WAFv2 Web ACL + association
 │   ├── observability.tf # Dashboard, alarms, SNS, access-log group
 │   ├── budget.tf         # AWS Budgets guardrail
+│   ├── codedeploy.tf    # CodeDeploy app + group (Lambda canary + rollback)
 │   └── *.tf             # state backend, variables, outputs
 ├── supabase/
 │   ├── schema.sql       # Table definitions (transactions, batches)
 │   └── rls.sql          # Row Level Security lockdown
 ├── .github/workflows/
-│   └── ci-cd.yml        # test → scan → plan → approve → apply → validate → canary → smoke → promote
+│   └── ci-cd.yml        # test → scan → plan → approve → apply → pre-traffic → CodeDeploy canary → smoke
 └── README.md
 ```
 
@@ -229,11 +231,10 @@ flowchart TD
     PLAN --> APP{{manual approval}}
     APP --> APPLY[terraform-apply<br/>+ CloudFront invalidation]
     APPLY --> PRE[pre-traffic-validation<br/>BETA alias · no real traffic]
-    PRE --> AB[lambda-ab-test<br/>shift ~50% canary]
-    AB --> SMOKE[smoke-tests<br/>live endpoint]
-    SMOKE --> CAN[canary analysis<br/>bake + error-rate check]
-    CAN -->|healthy| PROM[promote to 100%]
-    CAN -->|breached| RB[auto rollback<br/>to previous version]
+    PRE --> CD[deploy-canary<br/>CodeDeploy 10%/5min]
+    CD -->|alarms OK| PROM[shift to 100%]
+    CD -->|alarm breach| RB[auto rollback<br/>CodeDeploy]
+    PROM --> SMOKE[smoke-tests<br/>live endpoint]
 ```
 
 ```
@@ -245,13 +246,11 @@ push → test ─┐
                                           no real traffic — aws lambda invoke)
                                                          │
                                                          ▼
-                                     lambda-ab-test (shift ~50% to new version)
+                                    deploy-canary (AWS CodeDeploy Lambda
+                                    canary 10%/5min · auto-rollback on alarms)
                                                          │
                                                          ▼
                                         smoke-tests (against live API/CDN)
-                                                         │
-                                                         ▼
-                                       promote-canary (100% + clear routing)
 ```
 
 - **test** — Lambda + frontend unit tests.
@@ -262,20 +261,16 @@ push → test ─┐
 - **pre-traffic-validation** — invokes the new Lambda version (BETA alias)
   directly, bypassing API Gateway and real users entirely, before any real
   traffic is shifted onto it.
-- **lambda-ab-test** — shifts a weighted slice of real traffic to the new
-  version using Lambda aliases (blue/green canary). First deploys, or
-  no-op deploys, skip straight to 100%.
-- **smoke-tests** — asserts a malformed login is rejected (400), a wrong
-  password is rejected (401), and a protected route rejects unauthenticated
-  requests (401/403) — against the live endpoint, now that pre-traffic
-  validation has already de-risked the new code. No real credentials are
-  ever used or committed.
-- **promote-canary** — after smoke tests pass, bakes for a short window and
-  compares the new version's CloudWatch error rate against a threshold
-  (`scripts/canary_analysis.sh`). If healthy, it shifts the new version to
-  100% of LIVE and clears the routing config; if the error rate breaches the
-  threshold, it **automatically rolls back** LIVE to the previous version and
-  fails the pipeline.
+- **deploy-canary** — hands the alias shift to **AWS CodeDeploy**
+  (`terraform/codedeploy.tf`): a Lambda canary deployment moves LIVE from the
+  current version to the new one at 10% for 5 minutes, then 100%, and
+  **auto-rolls-back** if the wired CloudWatch alarms (Lambda errors, API 5XX)
+  breach during that window. First deploys (no prior version) skip straight to
+  100%.
+- **smoke-tests** — after the canary has fully rolled out, asserts (against the
+  live endpoint) that a malformed login is rejected (400), a wrong password is
+  rejected (401), and a protected route rejects unauthenticated requests
+  (401/403). No real credentials are ever used or committed.
 
 ---
 
@@ -326,12 +321,11 @@ push → test ─┐
 
 ## Roadmap
 
-- Deepen canary analysis: the pipeline now bakes and compares the new
-  version's CloudWatch error rate before promoting, and auto-rolls-back on a
-  breach (`scripts/canary_analysis.sh`). Still to do: multi-metric checks
-  (latency/p95, 5XX), longer bake windows, synthetic canary traffic for a
-  firmer signal on low-traffic deploys, and wiring the existing CloudWatch
-  alarms directly into the rollback decision.
+- Canary rollout with automated rollback is now handled by **AWS CodeDeploy**
+  (10%/5min, auto-rollback on the Lambda-error and API-5XX alarms). Still to
+  deepen: richer rollback signals (latency/p95, WAF blocks), longer or
+  traffic-aware bake windows, and pre/post-traffic hook Lambdas for deeper
+  validation during the shift.
 - Move Terraform scanners from `soft_fail` to enforcing, closing findings.
 - Rotate the JWT secret automatically via Secrets Manager rotation.
 - Replace static admin credentials with Amazon Cognito.
@@ -376,10 +370,10 @@ Notes:
 
 Called out explicitly so they can be discussed honestly in a review:
 
-- **Canary analysis is basic.** `promote-canary` bakes and checks the new
-  version's error rate, and auto-rolls-back on a breach — but it is a single
-  metric over one short window, not a multi-signal, alarm-integrated analysis.
-  On a low-traffic deploy it can be "inconclusive" and pass by default.
+- **Canary rollback signals are simple.** CodeDeploy shifts 10%/5min and
+  auto-rolls-back, but only two threshold alarms (Lambda errors, API 5XX) drive
+  that decision — not latency percentiles, WAF blocks, or a business-metric
+  check. On a very low-traffic deploy the alarms may simply never fire.
 - **Single admin user.** Authentication is one admin whose username and bcrypt
   hash come from environment variables; there is no user store yet. See
   *Auth migration path (Cognito)* below and the `users` table design in
