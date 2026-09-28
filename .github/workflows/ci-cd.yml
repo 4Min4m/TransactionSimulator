@@ -18,7 +18,6 @@ env:
   JWT_SECRET: ${{ secrets.JWT_SECRET }}
   ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
   ADMIN_PASSWORD_HASH: ${{ secrets.ADMIN_PASSWORD_HASH }}
-  AB_TRAFFIC_WEIGHT: '0.5'
 
 jobs:
   test:
@@ -153,33 +152,11 @@ jobs:
         working-directory: terraform
         run: terraform plan -input=false -out=tfplan
 
-      - name: Capture current Lambda alias versions
-        id: snapshot-aliases
-        run: |
-          set -euo pipefail
-          mkdir -p artifacts
-          FUNCTION_NAME="TransactionSimulatorAPI"
-          LIVE_VERSION=$(aws lambda get-alias --function-name "$FUNCTION_NAME" --name LIVE --query 'FunctionVersion' --output text 2>/dev/null || true)
-          BETA_VERSION=$(aws lambda get-alias --function-name "$FUNCTION_NAME" --name BETA --query 'FunctionVersion' --output text 2>/dev/null || true)
-          cat <<JSON > artifacts/lambda_alias_versions.json
-          {
-            "function_name": "$FUNCTION_NAME",
-            "live_version": "${LIVE_VERSION:-}",
-            "beta_version": "${BETA_VERSION:-}"
-          }
-          JSON
-
       - name: Upload Terraform plan
         uses: actions/upload-artifact@v4
         with:
           name: terraform-plan
           path: terraform/tfplan
-
-      - name: Upload alias snapshot
-        uses: actions/upload-artifact@v4
-        with:
-          name: pre-deploy-alias-snapshot
-          path: artifacts/lambda_alias_versions.json
 
   manual-approval:
     name: Await Manual Approval
@@ -294,13 +271,10 @@ jobs:
       - name: Install jq
         run: sudo apt-get update -y && sudo apt-get install -y jq
 
-      # FIX: previously, traffic was shifted onto the new Lambda version
-      # (lambda-ab-test, below) BEFORE any smoke test ran against it — so a
-      # broken deploy would already be serving ~50% of real users by the
-      # time a problem was detected. This job invokes the BETA alias
-      # directly (bypassing API Gateway and any real users entirely) and
-      # only lets the pipeline proceed to shift real traffic if the new
-      # code behaves correctly in isolation.
+      # Validate the new version in isolation BEFORE CodeDeploy shifts any
+      # real traffic onto it: invoke the BETA alias directly (bypassing API
+      # Gateway and real users entirely) and only let the pipeline proceed to
+      # the CodeDeploy canary if the new code behaves correctly on its own.
       - name: Invoke BETA alias directly and check responses
         run: |
           set -euo pipefail
@@ -338,8 +312,8 @@ jobs:
 
           echo "New Lambda version passed pre-traffic validation."
 
-  lambda-ab-test:
-    name: Shift Canary Traffic to New Version
+  deploy-canary:
+    name: CodeDeploy Canary (10%/5min, alarm auto-rollback)
     runs-on: ubuntu-latest
     needs: pre-traffic-validation
     steps:
@@ -349,70 +323,63 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Download Terraform outputs
-        uses: actions/download-artifact@v4
-        with:
-          name: terraform-outputs
-          path: artifacts
-
-      - name: Download alias snapshot
-        uses: actions/download-artifact@v4
-        with:
-          name: pre-deploy-alias-snapshot
-          path: artifacts
-
       - name: Install jq
         run: sudo apt-get update -y && sudo apt-get install -y jq
 
-      - name: Configure traffic weights
-        id: shift
-        env:
-          ROUTING_WEIGHT: ${{ env.AB_TRAFFIC_WEIGHT }}
+      # Traffic shifting AND rollback are owned by AWS CodeDeploy (see
+      # terraform/codedeploy.tf): a Lambda canary deployment shifts the LIVE
+      # alias 10% -> 100% over 5 minutes, and AUTO-ROLLS-BACK if the wired
+      # CloudWatch alarms (Lambda errors, API 5XX) breach during the bake.
+      # This replaces the earlier hand-rolled alias-weight juggling + scripted
+      # error-rate check with the AWS-native canary mechanism.
+      - name: Create CodeDeploy deployment (or skip on first deploy)
         run: |
           set -euo pipefail
-          SNAPSHOT_FILE="artifacts/lambda_alias_versions.json"
-          OUTPUT_FILE="artifacts/terraform_outputs.json"
+          FUNCTION_NAME="TransactionSimulatorAPI"
+          APP="transaction-simulator-api"
+          DG="transaction-simulator-api-dg"
 
-          FUNCTION_NAME=$(jq -r '.lambda_function_name.value // ""' "$OUTPUT_FILE")
-          if [ -z "$FUNCTION_NAME" ] || [ "$FUNCTION_NAME" = "null" ]; then
-            echo "Unable to determine Lambda function name; aborting." >&2
-            exit 1
-          fi
+          CURRENT=$(aws lambda get-alias --function-name "$FUNCTION_NAME" --name LIVE --query 'FunctionVersion' --output text)
+          TARGET=$(aws lambda get-alias  --function-name "$FUNCTION_NAME" --name BETA --query 'FunctionVersion' --output text)
+          echo "LIVE is on version $CURRENT; new (BETA) version is $TARGET."
 
-          NEW_VERSION=$(aws lambda get-alias --function-name "$FUNCTION_NAME" --name BETA --query 'FunctionVersion' --output text)
-          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
-          echo "function_name=$FUNCTION_NAME" >> "$GITHUB_OUTPUT"
-
-          PREVIOUS_VERSION=$(jq -r '.live_version // ""' "$SNAPSHOT_FILE")
-
-          if [ -z "$PREVIOUS_VERSION" ] || [ "$PREVIOUS_VERSION" = "None" ] || [ "$PREVIOUS_VERSION" = "$NEW_VERSION" ]; then
-            echo "No prior LIVE version (first deploy) or nothing changed — promoting $NEW_VERSION to 100% directly, no canary needed."
-            aws lambda update-alias \
-              --function-name "$FUNCTION_NAME" \
-              --name LIVE \
-              --function-version "$NEW_VERSION" \
-              --routing-config "{}"
-            echo "promoted_directly=true" >> "$GITHUB_OUTPUT"
+          if [ "$CURRENT" = "$TARGET" ]; then
+            echo "First deploy or no code change (LIVE already == new version) — nothing to canary."
             exit 0
           fi
 
-          echo "promoted_directly=false" >> "$GITHUB_OUTPUT"
-          echo "Routing $(echo "$ROUTING_WEIGHT" | awk '{printf "%s%%", $1*100}') of traffic to version $NEW_VERSION while keeping version $PREVIOUS_VERSION as primary."
+          # Build the CodeDeploy AppSpec for the Lambda alias shift. The
+          # Current/Target versions must be the real, live version numbers, so
+          # the AppSpec is generated here rather than committed with hardcoded
+          # values (appspec.yml in the repo is a reference template).
+          APPSPEC=$(jq -n \
+            --arg fn "$FUNCTION_NAME" --arg cur "$CURRENT" --arg tgt "$TARGET" \
+            '{version:0.0, Resources:[{ ($fn): {Type:"AWS::Lambda::Function", Properties:{Name:$fn, Alias:"LIVE", CurrentVersion:$cur, TargetVersion:$tgt}}}]}')
+          REVISION=$(jq -n --arg c "$APPSPEC" '{revisionType:"AppSpecContent", appSpecContent:{content:$c}}')
 
-          aws lambda update-alias \
-            --function-name "$FUNCTION_NAME" \
-            --name LIVE \
-            --function-version "$PREVIOUS_VERSION" \
-            --routing-config "AdditionalVersionWeights={\"$NEW_VERSION\"=$ROUTING_WEIGHT}"
-    outputs:
-      new_version: ${{ steps.shift.outputs.new_version }}
-      function_name: ${{ steps.shift.outputs.function_name }}
-      promoted_directly: ${{ steps.shift.outputs.promoted_directly }}
+          DEP_ID=$(aws deploy create-deployment \
+            --application-name "$APP" \
+            --deployment-group-name "$DG" \
+            --revision "$REVISION" \
+            --description "Canary $CURRENT -> $TARGET from GitHub Actions" \
+            --query deploymentId --output text)
+          echo "Started CodeDeploy deployment $DEP_ID; waiting for completion..."
+
+          # Blocks until the canary reaches 100% (success) or CodeDeploy
+          # auto-rolls-back on an alarm/failure (non-zero exit here).
+          if aws deploy wait deployment-successful --deployment-id "$DEP_ID"; then
+            echo "CodeDeploy canary succeeded; LIVE now serves version $TARGET."
+          else
+            echo "CodeDeploy deployment $DEP_ID failed or was auto-rolled-back." >&2
+            aws deploy get-deployment --deployment-id "$DEP_ID" \
+              --query 'deploymentInfo.{status:status, rollback:rollbackInfo}' --output json >&2 || true
+            exit 1
+          fi
 
   smoke-tests:
-    name: Smoke Tests (against live canary traffic)
+    name: Smoke Tests (post-deploy, live endpoint)
     runs-on: ubuntu-latest
-    needs: lambda-ab-test
+    needs: deploy-canary
     steps:
       - name: Download Terraform outputs
         uses: actions/download-artifact@v4
@@ -493,81 +460,3 @@ jobs:
 
           echo "Smoke tests completed successfully."
 
-  promote-canary:
-    name: Analyze Canary, then Promote (or Roll Back)
-    runs-on: ubuntu-latest
-    needs: [lambda-ab-test, smoke-tests]
-    if: needs.lambda-ab-test.outputs.promoted_directly != 'true'
-    env:
-      # Bake window (seconds) the analysis script waits before reading metrics.
-      # Kept modest for CI; raise for a firmer signal in a real environment.
-      BAKE_SECONDS: '120'
-      ERROR_RATE_THRESHOLD: '0.05'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Download alias snapshot
-        uses: actions/download-artifact@v4
-        with:
-          name: pre-deploy-alias-snapshot
-          path: artifacts
-
-      - name: Record previous LIVE version (for rollback)
-        id: prev
-        run: |
-          set -euo pipefail
-          sudo apt-get update -y && sudo apt-get install -y jq
-          PREV=$(jq -r '.live_version // ""' artifacts/lambda_alias_versions.json)
-          echo "previous_version=$PREV" >> "$GITHUB_OUTPUT"
-
-      # METRIC-DRIVEN CANARY ANALYSIS (Round 2): smoke-tests already proved the
-      # canary slice responds correctly; this step now additionally bakes and
-      # compares the new version's real CloudWatch error rate against a
-      # threshold before we promote. If it breaches, the next step rolls back.
-      - name: Analyze canary error rate
-        run: |
-          chmod +x scripts/canary_analysis.sh
-          FUNCTION_NAME="${{ needs.lambda-ab-test.outputs.function_name }}" \
-          NEW_VERSION="${{ needs.lambda-ab-test.outputs.new_version }}" \
-          BAKE_SECONDS="${BAKE_SECONDS}" \
-          ERROR_RATE_THRESHOLD="${ERROR_RATE_THRESHOLD}" \
-          scripts/canary_analysis.sh
-
-      # Runs ONLY if the analysis step above failed: shift 100% of LIVE traffic
-      # back to the previous known-good version and clear the routing config,
-      # then let the job fail so the pipeline stops red.
-      - name: Roll back to previous version (on unhealthy canary)
-        if: failure()
-        run: |
-          set -euo pipefail
-          PREV="${{ steps.prev.outputs.previous_version }}"
-          FUNCTION_NAME="${{ needs.lambda-ab-test.outputs.function_name }}"
-          if [ -z "$PREV" ] || [ "$PREV" = "None" ]; then
-            echo "No previous version recorded; cannot auto-roll-back. Investigate manually." >&2
-            exit 1
-          fi
-          echo "Rolling LIVE back to previous version $PREV and clearing canary weights."
-          aws lambda update-alias \
-            --function-name "$FUNCTION_NAME" \
-            --name LIVE \
-            --function-version "$PREV" \
-            --routing-config "{}"
-          echo "Rollback complete. LIVE is back on version $PREV."
-
-      # Reached only when analysis passed: complete the blue/green cycle.
-      - name: Promote new version to 100% of LIVE traffic
-        run: |
-          set -euo pipefail
-          aws lambda update-alias \
-            --function-name "${{ needs.lambda-ab-test.outputs.function_name }}" \
-            --name LIVE \
-            --function-version "${{ needs.lambda-ab-test.outputs.new_version }}" \
-            --routing-config "{}"
-          echo "LIVE now points 100% at version ${{ needs.lambda-ab-test.outputs.new_version }}."
