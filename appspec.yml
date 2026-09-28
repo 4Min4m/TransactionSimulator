@@ -1,3 +1,19 @@
+# appspec.yml — CodeDeploy AppSpec for the API Lambda canary.
+#
+# This is a REFERENCE TEMPLATE. The live deployment is created by the
+# `deploy-canary` job in .github/workflows/ci-cd.yml, which generates the real
+# AppSpec at deploy time and injects the actual CurrentVersion / TargetVersion
+# (the numbers below are placeholders — they must be the real published Lambda
+# versions, so they cannot be committed here).
+#
+# Traffic shifting + rollback behaviour come from the CodeDeploy deployment
+# group in terraform/codedeploy.tf:
+#   - deployment config: CodeDeployDefault.LambdaCanary10Percent5Minutes
+#   - auto-rollback on the CloudWatch alarms (Lambda errors, API 5XX).
+#
+# No BeforeAllowTraffic / AfterAllowTraffic hooks are used: pre-traffic
+# validation is already done by the `pre-traffic-validation` CI job (which
+# invokes the BETA alias directly), so no extra hook Lambdas are deployed.
 version: 0.0
 Resources:
   - TransactionSimulatorAPI:
@@ -5,8 +21,5 @@ Resources:
       Properties:
         Name: "TransactionSimulatorAPI"
         Alias: "LIVE"
-        CurrentVersion: "1"
-        TargetVersion: "2"
-Hooks:
-  - BeforeAllowTraffic: "TransactionSimulatorAPIPreTrafficHook"
-  - AfterAllowTraffic: "TransactionSimulatorAPIPostTrafficHook"
+        CurrentVersion: "<injected at deploy time>"
+        TargetVersion: "<injected at deploy time>"
