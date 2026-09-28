@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Payment Transaction Simulator — secure, observable AWS serverless platform</title>
+<meta name="description" content="A payment-transaction simulator built to showcase secure, observable, automated AWS serverless infrastructure: JWT auth at the edge, async batch processing, CodeDeploy canary with automatic rollback, WAFv2, and observability as code." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#080C16;
+    --bg-elev:#0E1524;
+    --bg-elev-2:#111A2C;
+    --line:#1C2740;
+    --line-bright:#283860;
+    --ink:#E7ECF7;
+    --muted:#8DA0BF;
+    --faint:#5C6E8F;
+    --signal:#49E0C8;      /* telemetry teal — the "live" signal colour */
+    --signal-dim:#2C7C74;
+    --indigo:#8AA6FF;      /* async / batch path */
+    --amber:#F6B860;       /* rollback / alarm path */
+    --danger:#F1738B;
+    --maxw:1080px;
+    color-scheme: dark;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth; -webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"Space Grotesk", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    line-height:1.6; letter-spacing:.1px;
+    padding-top:env(safe-area-inset-top,0); padding-bottom:env(safe-area-inset-bottom,0);
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:0 24px}
+  a{color:inherit; text-decoration:none}
+  .mono{font-family:"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace}
+
+  /* ---- background field: faint control-plane grid + glow ---- */
+  .field{position:fixed; inset:0; z-index:-1; overflow:hidden; pointer-events:none}
+  .field::before{
+    content:""; position:absolute; inset:-2px;
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size:52px 52px; opacity:.22;
+    mask-image:radial-gradient(circle at 50% 0%, #000 0%, transparent 72%);
+  }
+  .field::after{
+    content:""; position:absolute; top:-30vh; left:50%; transform:translateX(-50%);
+    width:90vw; height:70vh; border-radius:50%;
+    background:radial-gradient(ellipse at center, rgba(73,224,200,.10), transparent 60%);
+    filter:blur(30px);
+  }
+
+  /* ---- top bar ---- */
+  header.bar{position:sticky; top:0; z-index:20; backdrop-filter:blur(10px);
+    background:linear-gradient(180deg, rgba(8,12,22,.86), rgba(8,12,22,.55));
+    border-bottom:1px solid var(--line)}
+  .bar .wrap{display:flex; align-items:center; justify-content:space-between; height:60px; padding-top:env(safe-area-inset-top,0)}
+  .brand{display:flex; align-items:center; gap:11px; font-weight:600}
+  .brand .dot{width:9px; height:9px; border-radius:50%; background:var(--signal);
+    box-shadow:0 0 0 3px rgba(73,224,200,.16); animation:beat 2.4s ease-in-out infinite}
+  @keyframes beat{0%,100%{opacity:.55} 50%{opacity:1}}
+  .bar nav{display:flex; gap:22px; align-items:center}
+  .bar nav a{color:var(--muted); font-size:14px}
+  .bar nav a:hover{color:var(--ink)}
+  .ghost{border:1px solid var(--line-bright); padding:8px 14px; border-radius:8px; color:var(--ink)!important; font-size:14px}
+  .ghost:hover{border-color:var(--signal); background:rgba(73,224,200,.06)}
+  @media (max-width:680px){ .bar nav a.navlink{display:none} }
+
+  /* ---- hero ---- */
+  .hero{padding:88px 0 40px}
+  .kicker{font-family:"JetBrains Mono", monospace; font-size:12.5px; color:var(--signal);
+    display:flex; align-items:center; gap:10px; margin-bottom:22px}
+  .kicker .rule{height:1px; width:44px; background:linear-gradient(90deg,var(--signal),transparent)}
+  h1{font-size:clamp(34px,6vw,60px); line-height:1.04; font-weight:700; margin:0 0 20px; letter-spacing:-.5px; max-width:16ch}
+  h1 .thin{color:var(--muted); font-weight:400}
+  .lede{font-size:clamp(16px,2.1vw,19px); color:var(--muted); max-width:60ch; margin:0 0 20px}
+  .note{font-size:14px; color:var(--faint); max-width:64ch; margin:0 0 30px}
+  .note b{color:var(--muted); font-weight:600}
+  .cta-row{display:flex; flex-wrap:wrap; gap:14px; align-items:center}
+  .btn{display:inline-flex; align-items:center; gap:9px; padding:13px 20px; border-radius:10px; font-weight:600; font-size:15px}
+  .btn.primary{background:var(--signal); color:#04120F}
+  .btn.primary:hover{filter:brightness(1.08)}
+  .btn.line{border:1px solid var(--line-bright); color:var(--ink)}
+  .btn.line:hover{border-color:var(--signal)}
+
+  .telemetry{display:flex; flex-wrap:wrap; gap:8px; margin-top:34px}
+  .chip{font-family:"JetBrains Mono", monospace; font-size:12px; color:var(--muted);
+    border:1px solid var(--line); background:var(--bg-elev); padding:6px 11px; border-radius:999px}
+  .chip b{color:var(--signal); font-weight:600}
+
+  /* ---- section scaffolding ---- */
+  section{padding:64px 0}
+  .sec-head{display:flex; align-items:baseline; gap:14px; margin-bottom:28px; flex-wrap:wrap}
+  .sec-head h2{font-size:clamp(23px,3.4vw,32px); margin:0; font-weight:600; letter-spacing:-.3px}
+  .sec-head .tag{font-family:"JetBrains Mono", monospace; font-size:12px; color:var(--faint)}
+  .sec-lede{color:var(--muted); max-width:64ch; margin:-14px 0 30px; font-size:15.5px}
+
+  /* ---- flow diagram (the centrepiece) ---- */
+  .panel{border:1px solid var(--line); border-radius:16px; background:
+      linear-gradient(180deg, var(--bg-elev), var(--bg));
+    padding:18px; overflow:hidden}
+  .diagram-scroll{overflow-x:auto}
+  svg.flow{display:block; width:100%; min-width:720px; height:auto}
+  .flow text{font-family:"JetBrains Mono", monospace; fill:var(--ink)}
+  .flow .lbl{font-size:12px}
+  .flow .sub{font-size:9.5px; fill:var(--faint)}
+  .node rect{fill:var(--bg-elev-2); stroke:var(--line-bright); rx:9}
+  .node.edge rect{stroke:var(--indigo)}
+  .node.sig rect{stroke:var(--signal-dim)}
+  .wire{fill:none; stroke:var(--line-bright); stroke-width:1.6}
+  .wire.req{stroke:var(--signal); stroke-dasharray:5 7; animation:flow 1.1s linear infinite}
+  .wire.async{stroke:var(--indigo); stroke-dasharray:5 7; animation:flow 1.4s linear infinite}
+  .wire.obs{stroke:var(--faint); stroke-dasharray:2 6; opacity:.7}
+  @keyframes flow{to{stroke-dashoffset:-24}}
+  .legend{display:flex; gap:20px; flex-wrap:wrap; margin-top:16px; font-size:12.5px; color:var(--muted)}
+  .legend span{display:inline-flex; align-items:center; gap:8px; font-family:"JetBrains Mono", monospace}
+  .legend i{width:16px; height:0; border-top:2px dashed currentColor; display:inline-block}
+  .legend .l-req{color:var(--signal)} .legend .l-async{color:var(--indigo)} .legend .l-obs{color:var(--faint)}
+
+  /* ---- capability list (structured, not identical cards) ---- */
+  .caps{display:grid; grid-template-columns:1fr 1fr; gap:0; border:1px solid var(--line); border-radius:16px; overflow:hidden}
+  .cap{padding:22px 22px; border-top:1px solid var(--line); border-right:1px solid var(--line)}
+  .cap:nth-child(-n+2){border-top:none}
+  .cap:nth-child(2n){border-right:none}
+  .cap h3{margin:0 0 7px; font-size:16.5px; font-weight:600; display:flex; align-items:center; gap:10px}
+  .cap h3 .id{font-family:"JetBrains Mono", monospace; font-size:11px; color:var(--signal); border:1px solid var(--signal-dim); border-radius:6px; padding:2px 6px}
+  .cap p{margin:0; color:var(--muted); font-size:14.5px}
+  .cap p code{font-family:"JetBrains Mono", monospace; font-size:12.5px; color:var(--indigo); background:rgba(138,166,255,.08); padding:1px 5px; border-radius:4px}
+  @media (max-width:640px){ .caps{grid-template-columns:1fr} .cap{border-right:none!important} .cap:nth-child(2){border-top:1px solid var(--line)} }
+
+  /* ---- pipeline ---- */
+  .pipe{display:flex; flex-wrap:wrap; align-items:stretch; gap:10px}
+  .stage{flex:1 1 128px; min-width:128px; border:1px solid var(--line); border-radius:11px; background:var(--bg-elev); padding:13px 14px}
+  .stage .n{font-family:"JetBrains Mono", monospace; font-size:10.5px; color:var(--faint)}
+  .stage .t{font-weight:600; font-size:14.5px; margin-top:3px}
+  .stage .d{color:var(--muted); font-size:12.5px; margin-top:4px}
+  .stage.gate{border-color:var(--line-bright)}
+  .stage.canary{border-color:var(--signal-dim)}
+  .stage.canary .t{color:var(--signal)}
+  .rollback{margin-top:14px; display:flex; align-items:center; gap:12px; font-size:13.5px; color:var(--muted);
+    border:1px dashed var(--amber); border-radius:11px; padding:12px 15px; background:rgba(246,184,96,.05)}
+  .rollback .b{font-family:"JetBrains Mono", monospace; color:var(--amber); font-size:12px; white-space:nowrap}
+
+  /* ---- stack ---- */
+  .stack{display:grid; grid-template-columns:repeat(2,1fr); gap:22px}
+  .layer h4{margin:0 0 12px; font-size:13px; color:var(--faint); font-family:"JetBrains Mono", monospace; font-weight:500}
+  .layer .items{display:flex; flex-wrap:wrap; gap:8px}
+  .tech{font-size:13px; border:1px solid var(--line); background:var(--bg-elev); border-radius:8px; padding:6px 11px; color:var(--ink)}
+  @media (max-width:640px){ .stack{grid-template-columns:1fr} }
+
+  /* ---- honesty strip ---- */
+  .honest{border:1px solid var(--line); border-left:3px solid var(--amber); border-radius:12px; background:var(--bg-elev); padding:20px 22px}
+  .honest h3{margin:0 0 10px; font-size:16px; font-weight:600}
+  .honest ul{margin:0; padding-left:18px; color:var(--muted); font-size:14.5px}
+  .honest li{margin:6px 0}
+
+  /* ---- footer ---- */
+  footer{border-top:1px solid var(--line); margin-top:24px; padding:40px 0 60px}
+  .foot{display:flex; justify-content:space-between; gap:20px; flex-wrap:wrap; align-items:flex-end}
+  .foot .who{font-size:14px; color:var(--muted)}
+  .foot .who b{color:var(--ink); font-weight:600}
+  .foot .links{display:flex; gap:20px; font-size:14px}
+  .foot .links a{color:var(--muted)} .foot .links a:hover{color:var(--signal)}
+  .disclaimer{margin-top:22px; font-size:12.5px; color:var(--faint); font-family:"JetBrains Mono", monospace}
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important; scroll-behavior:auto!important}
+    .wire.req,.wire.async{stroke-dasharray:5 7}
+  }
+</style>
+</head>
+<body>
+<div class="field" aria-hidden="true"></div>
+
+<header class="bar">
+  <div class="wrap">
+    <a class="brand" href="#top"><span class="dot"></span> Payment&nbsp;Transaction&nbsp;Simulator</a>
+    <nav>
+      <a class="navlink" href="#flow">Architecture</a>
+      <a class="navlink" href="#capabilities">Capabilities</a>
+      <a class="navlink" href="#pipeline">Delivery</a>
+      <a class="ghost mono" href="https://github.com/your-username/TransactionSimulator">View source</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <!-- HERO -->
+  <section class="hero">
+    <div class="wrap">
+      <div class="kicker mono"><span class="rule"></span> AWS serverless · platform-engineering showcase</div>
+      <h1>Payments are the demo. <span class="thin">The platform is the point.</span></h1>
+      <p class="lede">A small ISO&nbsp;8583-style transaction simulator wrapped in production-grade AWS infrastructure — so the interesting work is the security, reliability, and automation around it, not the app itself.</p>
+      <p class="note">No real money moves here. Every transaction is synthetic. What's real is the platform: <b>JWT auth enforced at the edge, asynchronous batch processing, canary deploys with automatic rollback, and monitoring defined entirely as code.</b></p>
+      <div class="cta-row">
+        <a class="btn primary mono" href="https://github.com/your-username/TransactionSimulator">Read the code</a>
+        <a class="btn line mono" href="https://github.com/your-username/TransactionSimulator/blob/main/README.md">Architecture &amp; decisions</a>
+      </div>
+      <div class="telemetry">
+        <span class="chip mono"><b>runtime</b>&nbsp;Node.js&nbsp;20 · Lambda</span>
+        <span class="chip mono"><b>iac</b>&nbsp;Terraform</span>
+        <span class="chip mono"><b>ci/cd</b>&nbsp;GitHub&nbsp;Actions · OIDC</span>
+        <span class="chip mono"><b>edge</b>&nbsp;CloudFront · WAFv2</span>
+        <span class="chip mono"><b>deploy</b>&nbsp;CodeDeploy&nbsp;canary</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- FLOW DIAGRAM -->
+  <section id="flow">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>How a request moves through the platform</h2>
+        <span class="tag mono">// two paths: synchronous request, asynchronous batch</span>
+      </div>
+      <p class="sec-lede">A protected call is authorised at the API Gateway edge before the main function ever runs. A load-test batch is accepted instantly and handed to a background worker over a queue, so no request is ever blocked waiting on bulk work.</p>
+
+      <div class="panel">
+        <div class="diagram-scroll">
+          <svg class="flow" viewBox="0 0 980 430" role="img" aria-label="Architecture flow diagram: browser through CloudFront and WAF to API Gateway, a JWT Lambda authorizer, the API Lambda, Secrets Manager and Supabase; and the asynchronous batch path from the API Lambda through SQS to a worker Lambda.">
+            <!-- WIRES (drawn first, under nodes) -->
+            <!-- request path -->
+            <path class="wire req" d="M118,96 H196"/>
+            <path class="wire req" d="M324,96 H402"/>
+            <path class="wire req" d="M530,96 H620"/>
+            <path class="wire req" d="M690,120 V168"/>            <!-- gw -> authorizer -->
+            <path class="wire req" d="M690,224 V262"/>            <!-- authorizer -> api lambda (allow) -->
+            <path class="wire req" d="M620,300 H556"/>            <!-- api lambda -> secrets -->
+            <path class="wire req" d="M760,300 H828"/>            <!-- api lambda -> supabase -->
+            <!-- async batch path -->
+            <path class="wire async" d="M690,340 V380 H470"/>     <!-- api lambda -> sqs -->
+            <path class="wire async" d="M360,380 H250 V330"/>     <!-- sqs -> worker -->
+            <path class="wire async" d="M196,300 H150 V300"/>     <!-- worker -> supabase(left) via -->
+            <path class="wire async" d="M150,300 H150"/>
+            <path class="wire async" d="M196,300 H136 V330"/>
+            <!-- observability taps -->
+            <path class="wire obs" d="M690,344 C760,400 900,390 928,344"/>
+
+            <!-- NODES -->
+            <g class="node edge">
+              <rect x="40" y="74" width="78" height="44"/>
+              <text class="lbl" x="79" y="93" text-anchor="middle">Browser</text>
+              <text class="sub" x="79" y="107" text-anchor="middle">Bearer JWT</text>
+            </g>
+            <g class="node edge">
+              <rect x="196" y="70" width="128" height="52"/>
+              <text class="lbl" x="260" y="90" text-anchor="middle">CloudFront + OAC</text>
+              <text class="sub" x="260" y="106" text-anchor="middle">private S3 · HTTPS</text>
+            </g>
+            <g class="node edge">
+              <rect x="402" y="74" width="128" height="44"/>
+              <text class="lbl" x="466" y="93" text-anchor="middle">WAFv2</text>
+              <text class="sub" x="466" y="107" text-anchor="middle">managed + rate rules</text>
+            </g>
+            <g class="node">
+              <rect x="620" y="74" width="140" height="46"/>
+              <text class="lbl" x="690" y="93" text-anchor="middle">API Gateway</text>
+              <text class="sub" x="690" y="108" text-anchor="middle">stage · throttle · logs</text>
+            </g>
+            <g class="node sig">
+              <rect x="612" y="168" width="156" height="56"/>
+              <text class="lbl" x="690" y="190" text-anchor="middle">Lambda Authorizer</text>
+              <text class="sub" x="690" y="206" text-anchor="middle">verify JWT → allow/deny</text>
+            </g>
+            <g class="node sig">
+              <rect x="620" y="262" width="140" height="78"/>
+              <text class="lbl" x="690" y="292" text-anchor="middle">API Lambda</text>
+              <text class="sub" x="690" y="308" text-anchor="middle">Node.js 20</text>
+              <text class="sub" x="690" y="322" text-anchor="middle">PAN masked</text>
+            </g>
+            <g class="node">
+              <rect x="430" y="278" width="126" height="44"/>
+              <text class="lbl" x="493" y="297" text-anchor="middle">Secrets Manager</text>
+              <text class="sub" x="493" y="311" text-anchor="middle">JWT secret</text>
+            </g>
+            <g class="node">
+              <rect x="828" y="278" width="118" height="44"/>
+              <text class="lbl" x="887" y="297" text-anchor="middle">Supabase</text>
+              <text class="sub" x="887" y="311" text-anchor="middle">Postgres · RLS</text>
+            </g>
+            <!-- async -->
+            <g class="node edge">
+              <rect x="360" y="358" width="110" height="44"/>
+              <text class="lbl" x="415" y="377" text-anchor="middle">SQS queue</text>
+              <text class="sub" x="415" y="391" text-anchor="middle">+ DLQ</text>
+            </g>
+            <g class="node edge">
+              <rect x="136" y="308" width="114" height="44"/>
+              <text class="lbl" x="193" y="327" text-anchor="middle">Batch Worker</text>
+              <text class="sub" x="193" y="341" text-anchor="middle">async Lambda</text>
+            </g>
+            <!-- observability -->
+            <g class="node">
+              <rect x="872" y="322" width="108" height="44"/>
+              <text class="lbl" x="926" y="341" text-anchor="middle">CloudWatch</text>
+              <text class="sub" x="926" y="355" text-anchor="middle">X-Ray · alarms</text>
+            </g>
+          </svg>
+        </div>
+        <div class="legend mono">
+          <span class="l-req"><i></i> synchronous request</span>
+          <span class="l-async"><i></i> asynchronous batch</span>
+          <span class="l-obs"><i></i> traces &amp; logs</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CAPABILITIES -->
+  <section id="capabilities">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>What the platform actually does</h2>
+        <span class="tag mono">// eight decisions worth defending in a review</span>
+      </div>
+      <div class="caps">
+        <div class="cap">
+          <h3><span class="id">auth</span> JWT at the edge</h3>
+          <p>A dedicated Lambda authorizer verifies HS256 tokens before the main function runs. Login is timing-safe — a wrong username costs the same as a wrong password, so response timing can't enumerate users.</p>
+        </div>
+        <div class="cap">
+          <h3><span class="id">async</span> Batch off the request path</h3>
+          <p><code>POST /api/process-batch</code> enqueues to SQS and returns <code>202</code> immediately; a worker Lambda drains the queue and the client polls <code>GET /api/batches/{id}</code> for progress.</p>
+        </div>
+        <div class="cap">
+          <h3><span class="id">deploy</span> Canary with auto-rollback</h3>
+          <p>AWS CodeDeploy shifts the Lambda alias 10% for five minutes, then 100% — and rolls back automatically if the Lambda-error or API-5XX alarms breach during the bake.</p>
+        </div>
+        <div class="cap">
+          <h3><span class="id">waf</span> Login-scoped rate limiting</h3>
+          <p>WAFv2 managed rules plus a general per-IP limit, and a stricter one scoped to <code>/api/login</code> to blunt credential stuffing against the single admin account.</p>
+        </div>
+        <div class="cap">
+          <h3><span class="id">edge</span> Fully private origin</h3>
+          <p>S3 is entirely private; the frontend is reachable only through CloudFront over HTTPS via Origin Access Control. HTTP redirects to HTTPS; deep links resolve for the SPA.</p>
+        </div>
+        <div class="cap">
+          <h3><span class="id">data</span> Masking + RLS lockdown</h3>
+          <p>Card numbers are masked to <code>1234-****-****-5678</code> before any write or log, in one shared module. Supabase RLS denies the anon key entirely; only the server-side service_role key has access.</p>
+        </div>
+        <div class="cap">
+          <h3><span class="id">obs</span> Monitoring as code</h3>
+          <p>X-Ray tracing, structured JSON access logs, a CloudWatch dashboard, alarms wired to SNS (including the worker and its dead-letter queue), and an AWS Budget guardrail — all in Terraform.</p>
+        </div>
+        <div class="cap">
+          <h3><span class="id">ci/cd</span> Keyless, gated pipeline</h3>
+          <p>GitHub Actions authenticates to AWS via OIDC — no static keys. Tests and IaC scans gate a manual approval before any apply; secrets and state config never live in the repo.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PIPELINE -->
+  <section id="pipeline">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>From push to production</h2>
+        <span class="tag mono">// validate in isolation before real traffic ever shifts</span>
+      </div>
+      <p class="sec-lede">The new version is exercised directly on its BETA alias — bypassing the gateway and real users — before CodeDeploy shifts a single request onto it.</p>
+      <div class="pipe">
+        <div class="stage"><div class="n mono">01</div><div class="t">test + scan</div><div class="d">unit tests, tfsec, Checkov, npm audit</div></div>
+        <div class="stage"><div class="n mono">02</div><div class="t">plan</div><div class="d">terraform validate &amp; plan</div></div>
+        <div class="stage gate"><div class="n mono">03</div><div class="t">approve</div><div class="d">manual production gate</div></div>
+        <div class="stage"><div class="n mono">04</div><div class="t">apply</div><div class="d">infra + CloudFront invalidation</div></div>
+        <div class="stage gate"><div class="n mono">05</div><div class="t">pre-traffic</div><div class="d">invoke BETA directly · no real users</div></div>
+        <div class="stage canary"><div class="n mono">06</div><div class="t">CodeDeploy canary</div><div class="d">10% / 5&nbsp;min · alarm-watched</div></div>
+        <div class="stage"><div class="n mono">07</div><div class="t">smoke</div><div class="d">live endpoint, post-deploy</div></div>
+      </div>
+      <div class="rollback">
+        <span class="b mono">on alarm breach →</span>
+        <span>CodeDeploy rolls the alias back to the previous version automatically and the pipeline fails red. No human in the loop for the unhappy path.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- STACK -->
+  <section id="stack">
+    <div class="wrap">
+      <div class="sec-head"><h2>Stack</h2><span class="tag mono">// small surface, deep platform</span></div>
+      <div class="stack">
+        <div class="layer">
+          <h4>frontend</h4>
+          <div class="items">
+            <span class="tech">React 18</span><span class="tech">TypeScript</span><span class="tech">Vite</span><span class="tech">Tailwind</span>
+          </div>
+        </div>
+        <div class="layer">
+          <h4>backend</h4>
+          <div class="items">
+            <span class="tech">Lambda · Node.js 20</span><span class="tech">API Gateway</span><span class="tech">SQS + DLQ</span><span class="tech">JWT · bcrypt</span>
+          </div>
+        </div>
+        <div class="layer">
+          <h4>platform</h4>
+          <div class="items">
+            <span class="tech">CloudFront + OAC</span><span class="tech">WAFv2</span><span class="tech">Secrets Manager</span><span class="tech">CodeDeploy</span><span class="tech">X-Ray · CloudWatch</span>
+          </div>
+        </div>
+        <div class="layer">
+          <h4>data &amp; delivery</h4>
+          <div class="items">
+            <span class="tech">Supabase · Postgres</span><span class="tech">Row Level Security</span><span class="tech">Terraform</span><span class="tech">GitHub Actions · OIDC</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HONESTY -->
+  <section id="tradeoffs">
+    <div class="wrap">
+      <div class="honest">
+        <h3>Known trade-offs — stated on purpose</h3>
+        <ul>
+          <li>Rollback is driven by two threshold alarms (Lambda errors, API 5XX), not latency percentiles or business metrics.</li>
+          <li>One admin user, from environment variables. A DB-backed <code style="color:var(--indigo)">users</code> table and a Cognito migration path are designed but not yet wired.</li>
+          <li>The batch worker is at-least-once with a DLQ; it isn't idempotent, so a redelivered message can reprocess a batch.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <div class="who">Built by <b>Your Name</b> · <a class="mono" href="https://github.com/your-username" style="color:var(--signal)">@your-handle</a></div>
+      <div class="links mono">
+        <a href="https://github.com/your-username/TransactionSimulator">Repository</a>
+        <a href="https://github.com/your-username/TransactionSimulator/blob/main/README.md">README</a>
+        <a href="https://github.com/your-username/TransactionSimulator/blob/main/docs/DEEP_DIVE_fa.md">Deep dive</a>
+      </div>
+    </div>
+    <p class="disclaimer">Simulator only — generates synthetic ISO&nbsp;8583-style messages. No real cardholder data, no real settlement.</p>
+  </div>
+</footer>
+</body>
+</html>
