@@ -1,15 +1,17 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Hash, Wallet, Timer, Building2, Send } from "lucide-react";
 import { startBatch, getBatchStatus, BatchStatus } from "../services/api";
+import { errorMessage } from "../services/errors";
 
-// The backend processes batches ASYNCHRONOUSLY now: POST /api/process-batch
-// enqueues the job and returns a batch_id immediately (202), and a separate
-// worker Lambda does the work in the background. So this form kicks off the
-// batch and then polls GET /api/batches/{id} for live progress, instead of
-// waiting on a single blocking request that returns final counts.
+// Batches run asynchronously: POST /api/process-batch returns a batch_id
+// immediately (202) and a worker Lambda processes the job from SQS. The form
+// polls GET /api/batches/{id} until the batch completes or fails.
 const DEMO_MERCHANT_ID = "demo-merchant";
+const POLL_INTERVAL_MS = 1000;
+// Longest possible batch (300 s) plus generous headroom for queueing.
+const POLL_TIMEOUT_MS = 10 * 60 * 1000;
 
-export default function BatchForm() {
+export default function BatchForm({ onCompleted }: { onCompleted?: () => void }) {
   const [total_transactions, setTotalTransactions] = useState(10);
   const [total_amount, setTotalAmount] = useState(1000);
   const [duration_seconds, setDurationSeconds] = useState(60);
@@ -40,23 +42,27 @@ export default function BatchForm() {
         merchant_id: DEMO_MERCHANT_ID,
       });
 
-      // Poll the status endpoint until the worker reports "completed".
+      const startedAt = Date.now();
       pollRef.current = setInterval(async () => {
         try {
           const s = await getBatchStatus(batch_id);
           setStatus(s);
-          if (s.status === "completed") {
+          const timedOut = Date.now() - startedAt > POLL_TIMEOUT_MS;
+          if (s.status === "completed" || s.status === "failed" || timedOut) {
             if (pollRef.current) clearInterval(pollRef.current);
             setLoading(false);
+            if (s.status === "completed") onCompleted?.();
+            if (s.status === "failed") setError("The batch failed after retries; see the dead-letter queue alarm.");
+            else if (timedOut && s.status !== "completed") setError("Stopped polling; the batch is still running.");
           }
-        } catch (err: any) {
+        } catch (err) {
           if (pollRef.current) clearInterval(pollRef.current);
-          setError(err.message || "Failed to fetch batch status");
+          setError(errorMessage(err, "Failed to fetch batch status"));
           setLoading(false);
         }
-      }, 1000);
-    } catch (err: any) {
-      setError(err.message || "An error occurred");
+      }, POLL_INTERVAL_MS);
+    } catch (err) {
+      setError(errorMessage(err, "An error occurred"));
       setLoading(false);
     }
   };
@@ -128,6 +134,10 @@ export default function BatchForm() {
         />
       </div>
 
+      <p className="text-xs text-gray-500">
+        The worker cycles through test cards, so about 25% of payments decline with codes 05, 51, 54, 59 and 96.
+      </p>
+
       <button
         type="submit"
         disabled={loading}
@@ -145,9 +155,8 @@ export default function BatchForm() {
             Status: <span className="font-medium">{status.status}</span>
           </p>
           <p className="text-sm text-gray-800">
-            Processed: {status.success_count + status.failure_count} /{" "}
-            {status.total_transactions} — Approved: {status.success_count},
-            Declined: {status.failure_count}
+            Processed: {status.success_count + status.failure_count} / {status.total_transactions} —
+            Approved: {status.success_count}, Declined: {status.failure_count}
           </p>
         </div>
       )}
