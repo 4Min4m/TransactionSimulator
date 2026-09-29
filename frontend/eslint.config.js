@@ -22,8 +22,7 @@ export default tseslint.config(
       'react-refresh/only-export-components': [
         'warn',
         { allowConstantExport: true },
-      ],
-      "css/no-unknown-at-rule": "off" // for Tailwind (allow @tailwind / @apply at-rules)
+      ]
     },
   }
 );
