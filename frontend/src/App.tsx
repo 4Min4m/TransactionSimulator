@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { CreditCard } from "lucide-react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom";
 import TransactionForm from "./components/TransactionForm";
 import BatchForm from "./components/BatchForm";
 import TransactionHistory from "./components/TransactionHistory";
@@ -14,10 +14,14 @@ export default function App() {
   // Initialize from a (non-expired) token so the session survives a refresh.
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(isAuthenticated());
   const [showSignIn, setShowSignIn] = useState(false);
+  // Bumped after every payment/batch so history and chart reload.
+  const [dataVersion, setDataVersion] = useState(0);
+  const refreshData = () => setDataVersion((v) => v + 1);
 
   const handleSignIn = () => {
     setIsLoggedIn(true);
     setShowSignIn(false);
+    refreshData();
   };
 
   const handleSignOut = () => {
@@ -37,12 +41,23 @@ export default function App() {
               </h1>
             </div>
             <p className="text-gray-600">
-              Test payment transactions using mock data and ISO 8583 message format
+              Authorize test payments end to end: validation, issuer rules, ISO 8583 0100/0110 messages and
+              idempotent retries
             </p>
           </div>
 
           {/* Sign In / Sign Out buttons */}
-          <div className="flex justify-end mb-4">
+          <div className="flex justify-between items-center mb-4">
+            <nav className="flex gap-4 text-sm">
+              <Link to="/" className="text-indigo-700 hover:underline">
+                Simulator
+              </Link>
+              {isLoggedIn && (
+                <Link to="/admin" className="text-indigo-700 hover:underline">
+                  Admin dashboard
+                </Link>
+              )}
+            </nav>
             {!isLoggedIn ? (
               <button
                 onClick={() => setShowSignIn(true)}
@@ -90,9 +105,13 @@ export default function App() {
                     </nav>
                   </div>
 
-                  {activeTab === "single" ? <TransactionForm /> : <BatchForm />}
-                  <TransactionHistory />
-                  <TransactionChart />
+                  {activeTab === "single" ? (
+                    <TransactionForm onProcessed={refreshData} />
+                  ) : (
+                    <BatchForm onCompleted={refreshData} />
+                  )}
+                  <TransactionHistory key={`history-${dataVersion}`} />
+                  <TransactionChart key={`chart-${dataVersion}`} />
                 </div>
               }
             />
