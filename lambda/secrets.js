@@ -1,54 +1,48 @@
-// Resolves the JWT signing secret.
+// Runtime secret resolution.
 //
-// Priority:
-//   1. AWS Secrets Manager, if JWT_SECRET_ARN is set (production path).
-//   2. process.env.JWT_SECRET, as a local-dev / test fallback.
+// Each secret is looked up as:
+//   1. AWS Secrets Manager, when its `*_ARN` variable is set (deployed path).
+//   2. A plain environment variable, as a local-dev / unit-test fallback.
 //
-// The value is cached in module scope so we hit Secrets Manager at most once
-// per Lambda execution environment (per cold start), not on every request.
+// Values are cached per execution environment, so Secrets Manager is called
+// at most once per secret per cold start. Plaintext secrets never appear in
+// the Lambda configuration itself.
 
-const JWT_SECRET_ARN = process.env.JWT_SECRET_ARN;
+const cache = new Map();
+let smClient = null;
 
-let cachedSecret = null;
+const fetchFromSecretsManager = async (secretArn, jsonKeys) => {
+  const { SecretsManagerClient, GetSecretValueCommand } = require("@aws-sdk/client-secrets-manager");
+  if (!smClient) smClient = new SecretsManagerClient({});
+  const resp = await smClient.send(new GetSecretValueCommand({ SecretId: secretArn }));
 
-const fetchFromSecretsManager = async () => {
-  // AWS SDK v3 ships with the Lambda Node.js 20 runtime; it is also listed as a
-  // dependency so local installs and tests resolve it deterministically.
-  const {
-    SecretsManagerClient,
-    GetSecretValueCommand,
-  } = require("@aws-sdk/client-secrets-manager");
-
-  const client = new SecretsManagerClient({});
-  const resp = await client.send(
-    new GetSecretValueCommand({ SecretId: JWT_SECRET_ARN })
-  );
-
-  let value = resp.SecretString;
-  // Support both a raw string secret and a JSON secret like {"jwt_secret":"..."}.
+  const value = resp.SecretString;
+  // Accept either a raw string secret or a JSON document with a known key.
   try {
     const parsed = JSON.parse(value);
-    value = parsed.jwt_secret || parsed.JWT_SECRET || value;
+    if (parsed && typeof parsed === "object") {
+      for (const key of jsonKeys) if (parsed[key]) return parsed[key];
+    }
   } catch {
-    // Not JSON: use the raw string as-is.
+    // Not JSON: the raw string is the secret.
   }
   return value;
 };
 
-const getJwtSecret = async () => {
-  if (cachedSecret) return cachedSecret;
+const makeResolver = (name, arnVar, jsonKeys) => async () => {
+  if (cache.has(name)) return cache.get(name);
 
-  if (JWT_SECRET_ARN) {
-    cachedSecret = await fetchFromSecretsManager();
-    return cachedSecret;
-  }
+  const arn = process.env[arnVar];
+  let value;
+  if (arn) value = await fetchFromSecretsManager(arn, jsonKeys);
+  else if (process.env[name]) value = process.env[name];
+  else throw new Error(`Neither ${arnVar} nor ${name} is set`);
 
-  if (process.env.JWT_SECRET) {
-    cachedSecret = process.env.JWT_SECRET;
-    return cachedSecret;
-  }
-
-  throw new Error("Neither JWT_SECRET_ARN nor JWT_SECRET is set");
+  cache.set(name, value);
+  return value;
 };
 
-module.exports = { getJwtSecret };
+const getJwtSecret = makeResolver("JWT_SECRET", "JWT_SECRET_ARN", ["jwt_secret", "JWT_SECRET"]);
+const getSupabaseKey = makeResolver("SUPABASE_KEY", "SUPABASE_KEY_SECRET_ARN", ["supabase_key", "SUPABASE_KEY"]);
+
+module.exports = { getJwtSecret, getSupabaseKey };

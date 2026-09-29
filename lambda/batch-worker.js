@@ -1,69 +1,118 @@
-// Background batch worker — triggered by SQS (see terraform/batch-worker.tf).
+// Batch worker, triggered by SQS (see terraform/batch-worker.tf).
 //
-// WHY THIS EXISTS: the previous design ran the whole batch loop (with a
-// simulated per-transaction delay) inline inside the API Lambda that handled
-// POST /api/process-batch. That blocked a request/response Lambda for up to
-// `duration_seconds`, risking API Gateway/Lambda timeouts on larger batches
-// and tying up billed Lambda time on nothing but `setTimeout`. Now the API
-// Lambda only validates the request, writes a `batches` row, and enqueues a
-// message; this worker does the actual (simulated) processing asynchronously,
-// and the client polls GET /api/batches/{id} for progress.
-const {
-  processSingleTransaction,
-  updateBatchRecord,
-} = require("./shared");
+// POST /api/process-batch only validates the request, writes a `batches` row
+// and enqueues a message; this worker does the actual load test in the
+// background while the client polls GET /api/batches/{id}.
+//
+// Delivery is at-least-once, so the worker is written to be safely re-run:
+//   - each simulated payment has a deterministic order_id
+//     (`<batch_id>:<index>`), and the UNIQUE (merchant_id, order_id) index
+//     turns a redelivered payment into an idempotent replay, not a duplicate;
+//   - a batch already marked `completed` is acknowledged and skipped;
+//   - final counts are read back from the database, not from in-memory
+//     counters, so a resumed run still reports exact totals.
+//
+// Business declines are normal outcomes and are counted. Infrastructure
+// errors (e.g. the database is unreachable) are thrown so SQS retries the
+// message; after MAX_RECEIVE_COUNT attempts the batch is marked `failed` and
+// the message moves to the dead-letter queue.
 
-const processOneMessage = async (message) => {
-  const { batch_id, total_transactions, total_amount, duration_seconds, merchant_id } = message;
+const { getStore } = require("./store");
+const { processPayment } = require("./payments");
+const log = require("./log");
 
-  const amountPerTransaction = total_amount / total_transactions;
-  const delayMs = total_transactions > 0 ? (duration_seconds * 1000) / total_transactions : 0;
-  // Update the batch roughly every 10% so a client polling the status
-  // endpoint sees real progress instead of only "queued" -> "completed".
+const MAX_RECEIVE_COUNT = Number(process.env.MAX_RECEIVE_COUNT || 3);
+
+// Deterministic mix of approvals and declines (25% decline rate), cycled by
+// transaction index. Declining PANs are the test cards in authorization.js.
+const CARD_POOL = Object.freeze([
+  "4111111111111111", "5555555555554444", "378282246310005", "6011111111111117",
+  "4000000000000002", // 05 do not honor
+  "4111111111111111", "5555555555554444", "378282246310005", "6011111111111117",
+  "4000000000009995", // 51 insufficient funds
+  "4111111111111111", "5555555555554444", "378282246310005", "6011111111111117",
+  "4000000000000069", // 54 expired card
+  "4111111111111111", "5555555555554444", "4000000000000259", // 59 suspected fraud
+  "6011111111111117", "4000000000000119", // 96 system malfunction
+]);
+
+// Split an amount across n payments without losing a cent: the first
+// `remainder` payments carry one extra minor unit.
+const splitAmount = (totalMinor, n) => {
+  const base = Math.floor(totalMinor / n);
+  const remainder = totalMinor - base * n;
+  return (i) => base + (i < remainder ? 1 : 0);
+};
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const processBatch = async (message) => {
+  const { batch_id, total_transactions, total_amount_minor, duration_seconds, merchant_id } = message;
+  const store = getStore();
+
+  const batch = await store.getBatch(batch_id);
+  if (!batch) {
+    log.warn("batch not found, dropping message", { batchId: batch_id });
+    return;
+  }
+  if (batch.status === "completed") {
+    log.info("batch already completed, duplicate delivery ignored", { batchId: batch_id });
+    return;
+  }
+
+  await store.updateBatch(batch_id, { status: "processing" });
+
+  const amountFor = splitAmount(total_amount_minor, total_transactions);
+  const delayMs = (duration_seconds * 1000) / total_transactions;
   const progressEvery = Math.max(1, Math.ceil(total_transactions / 10));
-
-  let successCount = 0;
-  let failureCount = 0;
-
-  await updateBatchRecord(batch_id, { status: "processing" });
+  let approved = 0;
+  let declined = 0;
 
   for (let i = 0; i < total_transactions; i++) {
-    try {
-      const transaction = {
-        card_number: "4111111111111111", // simulator uses a fixed test PAN
-        amount: amountPerTransaction,
-        merchant_id,
-      };
-      const result = await processSingleTransaction(transaction);
-      if (result.success) successCount++;
-      else failureCount++;
-    } catch (err) {
-      failureCount++;
-      console.error(`[batch ${batch_id}] transaction ${i + 1} failed:`, err && err.message ? err.message : err);
-    }
+    const { replayed, row } = await processPayment(store, {
+      merchantId: merchant_id,
+      orderId: `${batch_id}:${i}`,
+      pan: CARD_POOL[i % CARD_POOL.length],
+      amountMinor: amountFor(i),
+      batchId: batch_id,
+    });
+    if (row.status === "APPROVED") approved++;
+    else declined++;
 
-    if ((i + 1) % progressEvery === 0 || i + 1 === total_transactions) {
-      await updateBatchRecord(batch_id, { success_count: successCount, failure_count: failureCount });
+    if ((i + 1) % progressEvery === 0) {
+      await store.updateBatch(batch_id, { success_count: approved, failure_count: declined });
     }
-
-    if (delayMs > 0 && i + 1 < total_transactions) {
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
-    }
+    // Pace only new work; replayed payments from an earlier attempt are
+    // caught up immediately.
+    if (!replayed && delayMs > 0 && i + 1 < total_transactions) await sleep(delayMs);
   }
 
-  await updateBatchRecord(batch_id, {
+  const totals = await store.countBatchOutcomes(batch_id);
+  await store.updateBatch(batch_id, {
     status: "completed",
-    success_count: successCount,
-    failure_count: failureCount,
+    success_count: totals.approved,
+    failure_count: totals.declined,
   });
+  log.info("batch completed", { batchId: batch_id, ...totals });
 };
 
-// Standard SQS-triggered Lambda handler shape: an event with `Records`.
 exports.handler = async (event) => {
-  const records = (event && event.Records) || [];
-  for (const record of records) {
+  for (const record of (event && event.Records) || []) {
     const message = JSON.parse(record.body);
-    console.log(`Processing batch ${message.batch_id} (${message.total_transactions} transactions)`);
-    await processOneMessage(message);
+    try {
+      await processBatch(message);
+    } catch (err) {
+      const attempt = Number(record.attributes?.ApproximateReceiveCount || 1);
+      log.error("batch attempt failed", { batchId: message.batch_id, attempt, error: String(err && err.message) });
+      if (attempt >= MAX_RECEIVE_COUNT) {
+        // Last attempt before the DLQ: make the failure visible to pollers.
+        await getStore()
+          .updateBatch(message.batch_id, { status: "failed" })
+          .catch(() => {});
+      }
+      throw err; // let SQS redeliver (or dead-letter) the message
+    }
   }
 };
+
+exports._internal = { CARD_POOL, splitAmount, processBatch };

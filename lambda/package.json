@@ -1,14 +1,19 @@
 {
-  "name": "lambda-function",
+  "name": "transaction-simulator-lambda",
   "version": "1.0.0",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test test/*.test.js",
+    "dev:api": "node local-server.js"
   },
   "dependencies": {
     "@aws-sdk/client-secrets-manager": "^3.600.0",
     "@aws-sdk/client-sqs": "^3.600.0",
-    "@supabase/supabase-js": "^2.49.3",
+    "@supabase/supabase-js": "^2.117.2",
     "bcryptjs": "^2.4.3",
     "jsonwebtoken": "^9.0.2"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=22"
   }
 }
