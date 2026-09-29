@@ -12,7 +12,6 @@ yarn-error.log*
 dist/
 **/dist/
 **/*.js.map
-**/*.d.ts
 
 # Vite
 .cache/
@@ -26,6 +25,9 @@ dist/
 *.tfvars
 terraform.tfstate.lock.info
 .terraform.lock.hcl
+terraform/.build/
+tfplan
+plan-bundle*
 
 # Supabase
 .supabase/
