@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Payment Transaction Simulator — secure, observable AWS serverless platform</title>
-<meta name="description" content="A payment-transaction simulator built to showcase secure, observable, automated AWS serverless infrastructure: JWT auth at the edge, async batch processing, CodeDeploy canary with automatic rollback, WAFv2, and observability as code." />
+<title>Payment Transaction Simulator — ISO 8583 authorization on a secure AWS serverless platform</title>
+<meta name="description" content="A card-payment authorization simulator: real ISO 8583 0100/0110 messages, deterministic issuer rules, database-enforced idempotency — on secure, observable AWS serverless infrastructure with canary deploys and automatic rollback." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -182,6 +182,7 @@
   <div class="wrap">
     <a class="brand" href="#top"><span class="dot"></span> Payment&nbsp;Transaction&nbsp;Simulator</a>
     <nav>
+      <a class="navlink" href="#payments">Payments</a>
       <a class="navlink" href="#flow">Architecture</a>
       <a class="navlink" href="#capabilities">Capabilities</a>
       <a class="navlink" href="#pipeline">Delivery</a>
@@ -194,20 +195,49 @@
   <!-- HERO -->
   <section class="hero">
     <div class="wrap">
-      <div class="kicker mono"><span class="rule"></span> AWS serverless · platform-engineering showcase</div>
-      <h1>Payments are the demo. <span class="thin">The platform is the point.</span></h1>
-      <p class="lede">A small ISO&nbsp;8583-style transaction simulator wrapped in production-grade AWS infrastructure — so the interesting work is the security, reliability, and automation around it, not the app itself.</p>
-      <p class="note">No real money moves here. Every transaction is synthetic. What's real is the platform: <b>JWT auth enforced at the edge, asynchronous batch processing, canary deploys with automatic rollback, and monitoring defined entirely as code.</b></p>
+      <div class="kicker mono"><span class="rule"></span> card payments · AWS serverless</div>
+      <h1>Card authorization, done properly. <span class="thin">On a platform built to be trusted.</span></h1>
+      <p class="lede">An authorization simulator that speaks real ISO&nbsp;8583 — bitmaps, MTIs, response codes — with idempotent retries and exact money handling, running on production-grade AWS infrastructure.</p>
+      <p class="note">No real money moves here; every card is a test card. What's real is the engineering: <b>a wire-format ISO&nbsp;8583 codec, deterministic issuer decisions, database-enforced idempotency, JWT auth at the edge, and canary deploys that roll back on their own.</b></p>
       <div class="cta-row">
         <a class="btn primary mono" href="https://github.com/4Min4m/TransactionSimulator">Read the code</a>
         <a class="btn line mono" href="https://github.com/4Min4m/TransactionSimulator/blob/main/README.md">Architecture &amp; decisions</a>
       </div>
       <div class="telemetry">
-        <span class="chip mono"><b>runtime</b>&nbsp;Node.js&nbsp;20 · Lambda</span>
+        <span class="chip mono"><b>protocol</b>&nbsp;ISO&nbsp;8583 · 0100/0110</span>
+        <span class="chip mono"><b>runtime</b>&nbsp;Node.js&nbsp;22 · Lambda</span>
         <span class="chip mono"><b>iac</b>&nbsp;Terraform</span>
         <span class="chip mono"><b>ci/cd</b>&nbsp;GitHub&nbsp;Actions · OIDC</span>
         <span class="chip mono"><b>edge</b>&nbsp;CloudFront · WAFv2</span>
         <span class="chip mono"><b>deploy</b>&nbsp;CodeDeploy&nbsp;canary</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- PAYMENTS -->
+  <section id="payments">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>The payment path</h2>
+        <span class="tag mono">// what happens to one authorization</span>
+      </div>
+      <div class="caps">
+        <div class="cap">
+          <h3><span class="id">iso</span> Real ISO&nbsp;8583 on the wire</h3>
+          <p>Each payment becomes a packed <code>0100</code> request and <code>0110</code> response: MTI, 64-bit primary bitmap, fixed and LLVAR fields, STAN, RRN, auth code (field 38) and response code (field 39). Stored masked, round-trip tested.</p>
+        </div>
+        <div class="cap">
+          <h3><span class="id">issuer</span> Deterministic decisions</h3>
+          <p>Ordered issuer rules: Luhn check (<code>14</code>), amount limit (<code>61</code>) and test cards for <code>05</code>, <code>51</code>, <code>54</code>, <code>59</code>, <code>96</code>. Same input, same answer — so every outcome is testable.</p>
+        </div>
+        <div class="cap">
+          <h3><span class="id">idem</span> Idempotency in the database</h3>
+          <p>A <code>UNIQUE (merchant_id, order_id)</code> index turns a client retry into a replay of the original result; reusing an order id with different details is a <code>409</code>. Concurrent duplicates are resolved by the database, not by luck.</p>
+        </div>
+        <div class="cap">
+          <h3><span class="id">batch</span> Safe to redeliver</h3>
+          <p>SQS is at-least-once, so the load-test worker uses deterministic order ids, resumes a half-finished batch without duplicates, splits amounts to the exact cent, and marks a batch failed before it reaches the DLQ.</p>
+        </div>
       </div>
     </div>
   </section>
@@ -271,7 +301,7 @@
             <g class="node sig">
               <rect x="620" y="262" width="140" height="78"/>
               <text class="lbl" x="690" y="292" text-anchor="middle">API Lambda</text>
-              <text class="sub" x="690" y="308" text-anchor="middle">Node.js 20</text>
+              <text class="sub" x="690" y="308" text-anchor="middle">Node.js 22</text>
               <text class="sub" x="690" y="322" text-anchor="middle">PAN masked</text>
             </g>
             <g class="node">
@@ -330,7 +360,7 @@
         </div>
         <div class="cap">
           <h3><span class="id">deploy</span> Canary with auto-rollback</h3>
-          <p>AWS CodeDeploy shifts the Lambda alias 10% for five minutes, then 100% — and rolls back automatically if the Lambda-error or API-5XX alarms breach during the bake.</p>
+          <p>AWS CodeDeploy shifts the Lambda alias 10% for five minutes, then 100% — and rolls back automatically if the Lambda-error, API-5XX or p95-latency alarms breach during the bake. Alarms use 60-second periods so they can fire inside that window.</p>
         </div>
         <div class="cap">
           <h3><span class="id">waf</span> Login-scoped rate limiting</h3>
@@ -342,15 +372,15 @@
         </div>
         <div class="cap">
           <h3><span class="id">data</span> Masking + RLS lockdown</h3>
-          <p>Card numbers are masked to <code>1234-****-****-5678</code> before any write or log, in one shared module. Supabase RLS denies the anon key entirely; only the server-side service_role key has access.</p>
+          <p>Card numbers are masked before any write or log — and a database CHECK constraint rejects an unmasked PAN even if the code regressed. RLS denies the anon key entirely; the service_role key lives in Secrets Manager, never in a Lambda environment.</p>
         </div>
         <div class="cap">
           <h3><span class="id">obs</span> Monitoring as code</h3>
-          <p>X-Ray tracing, structured JSON access logs, a CloudWatch dashboard, alarms wired to SNS (including the worker and its dead-letter queue), and an AWS Budget guardrail — all in Terraform.</p>
+          <p>X-Ray tracing, structured logs with PAN redaction, approval/decline business metrics from log filters, WAF logs with the Authorization header redacted, alarms on the worker and its DLQ, and a Budget guardrail — all in Terraform.</p>
         </div>
         <div class="cap">
           <h3><span class="id">ci/cd</span> Keyless, gated pipeline</h3>
-          <p>GitHub Actions authenticates to AWS via OIDC — no static keys. Tests and IaC scans gate a manual approval before any apply; secrets and state config never live in the repo.</p>
+          <p>OIDC instead of static keys, actions pinned to commit SHAs, and a saved plan that is encrypted, approved by a human, and applied exactly — never re-planned behind the reviewer's back.</p>
         </div>
       </div>
     </div>
@@ -365,12 +395,12 @@
       </div>
       <p class="sec-lede">The new version is exercised directly on its BETA alias — bypassing the gateway and real users — before CodeDeploy shifts a single request onto it.</p>
       <div class="pipe">
-        <div class="stage"><div class="n mono">01</div><div class="t">test + scan</div><div class="d">unit tests, tfsec, Checkov, npm audit</div></div>
-        <div class="stage"><div class="n mono">02</div><div class="t">plan</div><div class="d">terraform validate &amp; plan</div></div>
+        <div class="stage"><div class="n mono">01</div><div class="t">test + scan</div><div class="d">tests, lint, Checkov (enforcing), npm audit, terraform test</div></div>
+        <div class="stage"><div class="n mono">02</div><div class="t">plan</div><div class="d">saved plan, encrypted artifact</div></div>
         <div class="stage gate"><div class="n mono">03</div><div class="t">approve</div><div class="d">manual production gate</div></div>
-        <div class="stage"><div class="n mono">04</div><div class="t">apply</div><div class="d">infra + CloudFront invalidation</div></div>
-        <div class="stage gate"><div class="n mono">05</div><div class="t">pre-traffic</div><div class="d">invoke BETA directly · no real users</div></div>
-        <div class="stage canary"><div class="n mono">06</div><div class="t">CodeDeploy canary</div><div class="d">10% / 5&nbsp;min · alarm-watched</div></div>
+        <div class="stage"><div class="n mono">04</div><div class="t">apply</div><div class="d">exactly the approved plan</div></div>
+        <div class="stage gate"><div class="n mono">05</div><div class="t">pre-traffic</div><div class="d">BETA alias · real test payment · no users</div></div>
+        <div class="stage canary"><div class="n mono">06</div><div class="t">CodeDeploy canary</div><div class="d">10% / 5&nbsp;min · errors, 5XX, p95</div></div>
         <div class="stage"><div class="n mono">07</div><div class="t">smoke</div><div class="d">live endpoint, post-deploy</div></div>
       </div>
       <div class="rollback">
@@ -394,7 +424,7 @@
         <div class="layer">
           <h4>backend</h4>
           <div class="items">
-            <span class="tech">Lambda · Node.js 20</span><span class="tech">API Gateway</span><span class="tech">SQS + DLQ</span><span class="tech">JWT · bcrypt</span>
+            <span class="tech">Lambda · Node.js 22</span><span class="tech">API Gateway + JSON Schema</span><span class="tech">SQS + DLQ</span><span class="tech">JWT · bcrypt</span><span class="tech">ISO 8583 codec</span>
           </div>
         </div>
         <div class="layer">
@@ -419,9 +449,10 @@
       <div class="honest">
         <h3>Known trade-offs — stated on purpose</h3>
         <ul>
-          <li>Rollback is driven by two threshold alarms (Lambda errors, API 5XX), not latency percentiles or business metrics.</li>
+          <li>Rollback alarms are threshold-based; on a very low-traffic deploy they may never see enough requests to fire.</li>
           <li>One admin user, from environment variables. A DB-backed <code style="color:var(--indigo)">users</code> table and a Cognito migration path are designed but not yet wired.</li>
-          <li>The batch worker is at-least-once with a DLQ; it isn't idempotent, so a redelivered message can reprocess a batch.</li>
+          <li>The issuer is simulated by deterministic rules and test cards — there is no network connection, clearing or settlement.</li>
+          <li>Encryption uses AWS-managed keys; customer-managed KMS keys (and with them encrypted SNS alarms) are the next step.</li>
         </ul>
       </div>
     </div>
@@ -437,7 +468,7 @@
           <a href="https://aminam.netlify.app/" target="_blank" rel="noopener">Website</a>
       </div>
     </div>
-    <p class="disclaimer">Simulator only — generates synthetic ISO&nbsp;8583-style messages. No real cardholder data, no real settlement.</p>
+    <p class="disclaimer">Simulator only — test cards and synthetic ISO&nbsp;8583 messages. No real cardholder data, no real settlement.</p>
   </div>
 </footer>
 </body>
