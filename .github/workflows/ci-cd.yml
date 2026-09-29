@@ -1,462 +1,397 @@
 name: CI/CD Pipeline
 
+# test ─┐
+# scan ─┼─ plan ─ approval ─ apply ─ pre-traffic (BETA) ─ CodeDeploy canary ─ smoke
+# iac  ─┘
+#
+# Pull requests run only the first three jobs. Deploy jobs run on main.
+
 on:
   push:
-    branches: [ main ]
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
+# Least privilege by default; jobs that talk to AWS add id-token: write.
 permissions:
   contents: read
-  id-token: write
+
+# Never run two deploys against the same state at once.
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
-  AWS_REGION: ${{ secrets.AWS_REGION }}
-  TERRAFORM_VERSION: 1.7.5
-  NODE_VERSION: '20'
-  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-  SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-  JWT_SECRET: ${{ secrets.JWT_SECRET }}
-  ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
-  ADMIN_PASSWORD_HASH: ${{ secrets.ADMIN_PASSWORD_HASH }}
+  NODE_VERSION: "22"
+  TERRAFORM_VERSION: "1.16.4"
+  CHECKOV_VERSION: "3.3.20"
+
+# Third-party actions are pinned to full commit SHAs (tag in the comment), so
+# a moved or compromised tag cannot change what runs in this pipeline.
 
 jobs:
   test:
-    name: Unit Tests
+    name: Unit tests, lint, build
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            lambda/package-lock.json
+            frontend/package-lock.json
 
-      - name: Lambda dependencies + tests
+      - name: Lambda — install and test
         working-directory: lambda
         run: |
-          npm ci || npm install
+          npm ci
           npm test
 
-      - name: Frontend dependencies + tests
+      - name: Frontend — install, lint, test, build
         working-directory: frontend
+        env:
+          # Placeholder: this build only proves the bundle compiles.
+          VITE_API_BASE_URL: https://ci-placeholder.execute-api.us-east-1.amazonaws.com/prod
         run: |
-          npm ci || npm install
+          npm ci
+          npm run lint
           npm test
+          npm run build
 
   security-scan:
-    name: Security Scan
+    name: Security scan (IaC + dependencies)
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: tfsec (Terraform static analysis)
-        uses: aquasecurity/tfsec-action@v1.0.3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
-          working_directory: terraform
-          soft_fail: true
-
-      - name: Checkov (IaC misconfiguration scan)
-        uses: bridgecrewio/checkov-action@master
-        with:
-          directory: terraform
-          soft_fail: true
-          quiet: true
-
-      - name: npm audit (lambda)
-        working-directory: lambda
-        run: |
-          npm ci || npm install
-          npm audit --audit-level=high || true
-
-      - name: npm audit (frontend)
-        working-directory: frontend
-        run: |
-          npm ci || npm install
-          npm audit --audit-level=high || true
-
-  terraform-plan:
-    name: Terraform Plan
-    runs-on: ubuntu-latest
-    env:
-      TF_VAR_supabase_url: ${{ env.SUPABASE_URL }}
-      TF_VAR_supabase_key: ${{ env.SUPABASE_KEY }}
-      TF_VAR_jwt_secret: ${{ env.JWT_SECRET }}
-      TF_VAR_admin_username: ${{ env.ADMIN_USERNAME }}
-      TF_VAR_admin_password_hash: ${{ env.ADMIN_PASSWORD_HASH }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+          python-version: "3.12"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: |
-            frontend/package-lock.json
-            lambda/package-lock.json
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+      # Enforcing: any finding fails the build. Accepted risks are suppressed
+      # inline next to the resource with a written justification.
+      - name: Checkov — Terraform
+        run: |
+          pip install --quiet "checkov==${CHECKOV_VERSION}"
+          checkov -d terraform --framework terraform --quiet --compact
 
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
+      - name: Checkov — GitHub Actions workflows
+        run: checkov -d .github/workflows --framework github_actions --quiet --compact
+
+      - name: npm audit — Lambda (runtime dependencies)
+        working-directory: lambda
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: npm audit — frontend
+        working-directory: frontend
+        run: npm audit --audit-level=high
+
+  terraform-checks:
+    name: Terraform fmt, validate, offline plan test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
-
-      - name: Install frontend dependencies
-        working-directory: frontend
+          terraform_wrapper: false
+      - name: fmt / validate / test (mocked providers, no AWS credentials)
+        working-directory: terraform
         run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
+          terraform fmt -check -recursive
+          terraform init -backend=false -input=false
+          terraform validate
+          terraform test
+
+  terraform-plan:
+    name: Terraform plan
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    needs: [test, security-scan, terraform-checks]
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      TF_VAR_supabase_url: ${{ secrets.SUPABASE_URL }}
+      TF_VAR_supabase_key: ${{ secrets.SUPABASE_KEY }}
+      TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET }}
+      TF_VAR_admin_username: ${{ secrets.ADMIN_USERNAME }}
+      TF_VAR_admin_password_hash: ${{ secrets.ADMIN_PASSWORD_HASH }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            lambda/package-lock.json
+            frontend/package-lock.json
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
 
       - name: Build frontend
         working-directory: frontend
         env:
           VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
-        run: npm run build
+        run: |
+          npm ci
+          npm run build
 
-      - name: Install Lambda dependencies
+      - name: Install Lambda runtime dependencies
         working-directory: lambda
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
+        run: npm ci --omit=dev
 
-      - name: Terraform init
+      - name: Terraform init + plan
         working-directory: terraform
-        # FIX: the state bucket/lock table used to be hardcoded in
-        # backend.tf, leaking a real AWS account id in a public repo. They
-        # are now passed in here via -backend-config, sourced from GitHub
-        # secrets, and never committed anywhere.
+        # Backend bucket/table come from secrets and are never committed.
         run: |
-          terraform init -input=false -reconfigure \
+          terraform init -input=false \
             -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
             -backend-config="dynamodb_table=${{ secrets.TF_STATE_LOCK_TABLE }}"
+          terraform plan -input=false -out=tfplan
+          # Resource-level summary for reviewers (sensitive values are redacted by `show`).
+          terraform show -no-color tfplan > plan.txt
+          {
+            echo '### Terraform plan'
+            echo '```'
+            grep -E '^(Plan:|No changes)|# .* (will|must) be' plan.txt | head -200 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          rm plan.txt
 
-      - name: Terraform validate
-        working-directory: terraform
-        run: terraform validate
+      # A saved plan contains variable values (secrets) in plain text, and
+      # artifacts are readable by anyone with read access to the repository.
+      # So the plan — together with the exact build outputs it references —
+      # is encrypted before upload and kept for one day only.
+      - name: Encrypt plan bundle
+        env:
+          TF_PLAN_ENCRYPTION_KEY: ${{ secrets.TF_PLAN_ENCRYPTION_KEY }}
+        run: |
+          test -n "$TF_PLAN_ENCRYPTION_KEY" || { echo "TF_PLAN_ENCRYPTION_KEY secret is not set" >&2; exit 1; }
+          tar czf plan-bundle.tgz terraform/tfplan terraform/.terraform.lock.hcl terraform/.build frontend/dist
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt \
+            -in plan-bundle.tgz -out plan-bundle.tgz.enc -pass env:TF_PLAN_ENCRYPTION_KEY
+          rm plan-bundle.tgz terraform/tfplan
 
-      - name: Terraform plan
-        working-directory: terraform
-        run: terraform plan -input=false -out=tfplan
-
-      - name: Upload Terraform plan
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: terraform-plan
-          path: terraform/tfplan
+          name: plan-bundle
+          path: plan-bundle.tgz.enc
+          retention-days: 1
 
   manual-approval:
-    name: Await Manual Approval
+    name: Await manual approval
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    needs: [terraform-plan, test, security-scan]
+    needs: terraform-plan
     environment:
       name: production
     steps:
-      - name: Approval required
-        run: echo "Approve this job in the production environment to continue."
+      - run: echo "Approved. The exact plan shown in the previous job will be applied."
 
   terraform-apply:
-    name: Terraform Apply
+    name: Terraform apply (the approved plan)
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     needs: manual-approval
-    env:
-      TF_VAR_supabase_url: ${{ env.SUPABASE_URL }}
-      TF_VAR_supabase_key: ${{ env.SUPABASE_KEY }}
-      TF_VAR_jwt_secret: ${{ env.JWT_SECRET }}
-      TF_VAR_admin_username: ${{ env.ADMIN_USERNAME }}
-      TF_VAR_admin_password_hash: ${{ env.ADMIN_PASSWORD_HASH }}
+    permissions:
+      contents: read
+      id-token: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: |
-            frontend/package-lock.json
-            lambda/package-lock.json
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
+          aws-region: ${{ secrets.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: plan-bundle
 
-      - name: Install frontend dependencies
-        working-directory: frontend
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
-
-      - name: Build frontend
-        working-directory: frontend
+      - name: Decrypt plan bundle
         env:
-          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
-        run: npm run build
-
-      - name: Install Lambda dependencies
-        working-directory: lambda
+          TF_PLAN_ENCRYPTION_KEY: ${{ secrets.TF_PLAN_ENCRYPTION_KEY }}
         run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
+            -in plan-bundle.tgz.enc -out plan-bundle.tgz -pass env:TF_PLAN_ENCRYPTION_KEY
+          tar xzf plan-bundle.tgz
+          rm plan-bundle.tgz plan-bundle.tgz.enc
 
-      - name: Terraform init
-        working-directory: terraform
-        run: |
-          terraform init -input=false -reconfigure \
-            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
-            -backend-config="dynamodb_table=${{ secrets.TF_STATE_LOCK_TABLE }}"
-
+      # Applying the saved plan guarantees that what was reviewed is what
+      # changes. If state moved in the meantime, Terraform refuses the stale
+      # plan instead of applying something nobody approved.
       - name: Terraform apply
         working-directory: terraform
-        run: terraform apply -input=false -auto-approve
-
-      - name: Capture Terraform outputs
-        working-directory: terraform
-        run: terraform output -json > ../terraform_outputs.json
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_STATE_LOCK_TABLE }}"
+          terraform apply -input=false tfplan
+          terraform output -json > ../terraform_outputs.json
 
       - name: Invalidate CloudFront cache
-        working-directory: terraform
         run: |
-          set -euo pipefail
-          DIST_ID=$(terraform output -raw cloudfront_distribution_id)
-          echo "Invalidating CloudFront distribution $DIST_ID"
-          aws cloudfront create-invalidation \
-            --distribution-id "$DIST_ID" \
-            --paths "/*"
+          DIST_ID=$(jq -r '.cloudfront_distribution_id.value' terraform_outputs.json)
+          aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/*"
 
-      - name: Upload Terraform outputs
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: terraform-outputs
           path: terraform_outputs.json
+          retention-days: 7
 
   pre-traffic-validation:
-    name: Validate New Version (BETA, no real traffic)
+    name: Validate new version (BETA alias, no real traffic)
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     needs: terraform-apply
+    permissions:
+      contents: read
+      id-token: write
     steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Install jq
-        run: sudo apt-get update -y && sudo apt-get install -y jq
-
-      # Validate the new version in isolation BEFORE CodeDeploy shifts any
-      # real traffic onto it: invoke the BETA alias directly (bypassing API
-      # Gateway and real users entirely) and only let the pipeline proceed to
-      # the CodeDeploy canary if the new code behaves correctly on its own.
-      - name: Invoke BETA alias directly and check responses
+      # The BETA alias is invoked directly, bypassing API Gateway and real
+      # users, before CodeDeploy shifts any traffic to the new version.
+      - name: Invoke BETA directly
         run: |
           set -euo pipefail
-          FUNCTION_NAME="TransactionSimulatorAPI"
-
           invoke() {
-            aws lambda invoke \
-              --function-name "$FUNCTION_NAME:BETA" \
-              --cli-binary-format raw-in-base64-out \
-              --payload "$1" \
-              /tmp/response.json > /dev/null
+            aws lambda invoke --function-name "TransactionSimulatorAPI:BETA" \
+              --cli-binary-format raw-in-base64-out --payload "$1" /tmp/response.json > /dev/null
             cat /tmp/response.json
           }
+          expect_status() { # <expected> <response> <description>
+            local got; got=$(echo "$2" | jq -r '.statusCode')
+            if [ "$got" != "$1" ]; then echo "FAIL: $3 — expected $1, got $got: $2" >&2; exit 1; fi
+            echo "ok: $3"
+          }
 
-          echo "Checking invalid login is rejected with 401..."
-          RESP=$(invoke '{"httpMethod":"POST","path":"/api/login","headers":{},"body":"{\"username\":\"admin\",\"password\":\"definitely-wrong\"}"}')
-          STATUS=$(echo "$RESP" | jq -r '.statusCode')
-          if [ "$STATUS" != "401" ]; then
-            echo "Expected 401 for invalid login, got $STATUS: $RESP" >&2
-            exit 1
-          fi
+          expect_status 401 "$(invoke '{"httpMethod":"POST","path":"/api/login","headers":{},"body":"{\"username\":\"admin\",\"password\":\"definitely-wrong\"}"}')" \
+            "wrong password is rejected"
 
-          echo "Checking protected route rejects an unauthenticated request..."
-          RESP=$(invoke '{"httpMethod":"GET","path":"/api/transactions","headers":{}}')
-          # The BETA alias is invoked directly (bypassing the API Gateway
-          # authorizer), so the Lambda itself returns 200 here; what we're
-          # really confirming is that the deployed code path executes
-          # without error. Real auth enforcement is re-checked against the
-          # live API Gateway endpoint in the smoke-tests job below.
-          STATUS=$(echo "$RESP" | jq -r '.statusCode')
-          if [ "$STATUS" != "200" ]; then
-            echo "New version errored on a basic request: $RESP" >&2
-            exit 1
-          fi
+          expect_status 200 "$(invoke '{"httpMethod":"GET","path":"/api/transactions","headers":{},"queryStringParameters":{"limit":"1"}}')" \
+            "database is reachable (Supabase key read from Secrets Manager)"
 
-          echo "New Lambda version passed pre-traffic validation."
+          # End-to-end authorization with a deterministic order_id per commit:
+          # re-running this job replays the same payment instead of adding one.
+          BODY=$(jq -cn --arg id "ci-pretraffic-${GITHUB_SHA::12}" \
+            '{merchant_id:"demo-merchant", order_id:$id, amount:1.00, card_number:"4111111111111111"}')
+          RESP=$(invoke "$(jq -cn --arg b "$BODY" '{httpMethod:"POST", path:"/api/transactions", headers:{}, body:$b}')")
+          expect_status 200 "$RESP" "test payment is processed"
+          CODE=$(echo "$RESP" | jq -r '.body | fromjson | .responseCode')
+          [ "$CODE" = "00" ] || { echo "FAIL: expected response code 00, got $CODE" >&2; exit 1; }
+          echo "ok: test payment approved with ISO 8583 response code 00"
 
   deploy-canary:
-    name: CodeDeploy Canary (10%/5min, alarm auto-rollback)
+    name: CodeDeploy canary (10% / 5 min, alarm auto-rollback)
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     needs: pre-traffic-validation
+    permissions:
+      contents: read
+      id-token: write
     steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Install jq
-        run: sudo apt-get update -y && sudo apt-get install -y jq
-
-      # Traffic shifting AND rollback are owned by AWS CodeDeploy (see
-      # terraform/codedeploy.tf): a Lambda canary deployment shifts the LIVE
-      # alias 10% -> 100% over 5 minutes, and AUTO-ROLLS-BACK if the wired
-      # CloudWatch alarms (Lambda errors, API 5XX) breach during the bake.
-      # This replaces the earlier hand-rolled alias-weight juggling + scripted
-      # error-rate check with the AWS-native canary mechanism.
-      - name: Create CodeDeploy deployment (or skip on first deploy)
+      # CodeDeploy shifts the LIVE alias 10% -> 100% over 5 minutes and rolls
+      # back automatically if a wired alarm (Lambda errors, API 5XX, API p95
+      # latency) breaches during the bake. See terraform/codedeploy.tf.
+      - name: Create CodeDeploy deployment (skipped when nothing changed)
         run: |
           set -euo pipefail
           FUNCTION_NAME="TransactionSimulatorAPI"
-          APP="transaction-simulator-api"
-          DG="transaction-simulator-api-dg"
-
-          CURRENT=$(aws lambda get-alias --function-name "$FUNCTION_NAME" --name LIVE --query 'FunctionVersion' --output text)
-          TARGET=$(aws lambda get-alias  --function-name "$FUNCTION_NAME" --name BETA --query 'FunctionVersion' --output text)
-          echo "LIVE is on version $CURRENT; new (BETA) version is $TARGET."
-
+          CURRENT=$(aws lambda get-alias --function-name "$FUNCTION_NAME" --name LIVE --query FunctionVersion --output text)
+          TARGET=$(aws lambda get-alias --function-name "$FUNCTION_NAME" --name BETA --query FunctionVersion --output text)
+          echo "LIVE=$CURRENT, new (BETA)=$TARGET"
           if [ "$CURRENT" = "$TARGET" ]; then
-            echo "First deploy or no code change (LIVE already == new version) — nothing to canary."
+            echo "No new version to roll out."
             exit 0
           fi
 
-          # Build the CodeDeploy AppSpec for the Lambda alias shift. The
-          # Current/Target versions must be the real, live version numbers, so
-          # the AppSpec is generated here rather than committed with hardcoded
-          # values (appspec.yml in the repo is a reference template).
-          APPSPEC=$(jq -n \
-            --arg fn "$FUNCTION_NAME" --arg cur "$CURRENT" --arg tgt "$TARGET" \
-            '{version:0.0, Resources:[{ ($fn): {Type:"AWS::Lambda::Function", Properties:{Name:$fn, Alias:"LIVE", CurrentVersion:$cur, TargetVersion:$tgt}}}]}')
+          # Versions are only known now, so the AppSpec is generated here
+          # (appspec.yml in the repo is the reference template).
+          APPSPEC=$(jq -n --arg fn "$FUNCTION_NAME" --arg cur "$CURRENT" --arg tgt "$TARGET" \
+            '{version:0.0, Resources:[{($fn): {Type:"AWS::Lambda::Function", Properties:{Name:$fn, Alias:"LIVE", CurrentVersion:$cur, TargetVersion:$tgt}}}]}')
           REVISION=$(jq -n --arg c "$APPSPEC" '{revisionType:"AppSpecContent", appSpecContent:{content:$c}}')
 
           DEP_ID=$(aws deploy create-deployment \
-            --application-name "$APP" \
-            --deployment-group-name "$DG" \
+            --application-name transaction-simulator-api \
+            --deployment-group-name transaction-simulator-api-dg \
             --revision "$REVISION" \
-            --description "Canary $CURRENT -> $TARGET from GitHub Actions" \
+            --description "Canary $CURRENT -> $TARGET (${GITHUB_SHA::12})" \
             --query deploymentId --output text)
-          echo "Started CodeDeploy deployment $DEP_ID; waiting for completion..."
+          echo "Started CodeDeploy deployment $DEP_ID"
 
-          # Blocks until the canary reaches 100% (success) or CodeDeploy
-          # auto-rolls-back on an alarm/failure (non-zero exit here).
           if aws deploy wait deployment-successful --deployment-id "$DEP_ID"; then
-            echo "CodeDeploy canary succeeded; LIVE now serves version $TARGET."
+            echo "Canary succeeded; LIVE now serves version $TARGET."
           else
-            echo "CodeDeploy deployment $DEP_ID failed or was auto-rolled-back." >&2
+            echo "Deployment $DEP_ID failed or was rolled back." >&2
             aws deploy get-deployment --deployment-id "$DEP_ID" \
-              --query 'deploymentInfo.{status:status, rollback:rollbackInfo}' --output json >&2 || true
+              --query 'deploymentInfo.{status:status, rollback:rollbackInfo, error:errorInformation}' --output json >&2 || true
             exit 1
           fi
 
   smoke-tests:
-    name: Smoke Tests (post-deploy, live endpoint)
+    name: Smoke tests (live endpoints)
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     needs: deploy-canary
     steps:
-      - name: Download Terraform outputs
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: terraform-outputs
-          path: artifacts
 
-      - name: Install curl and jq
-        run: sudo apt-get update -y && sudo apt-get install -y curl jq
-
+      # Only behaviour that needs no real credentials is asserted, so no
+      # password is ever used or committed here.
       - name: Run smoke tests
-        env:
-          TERRAFORM_OUTPUTS: artifacts/terraform_outputs.json
         run: |
           set -euo pipefail
-          API_URL=$(jq -r '.api_gateway_invoke_url.value // ""' "$TERRAFORM_OUTPUTS")
-          FRONTEND_URL=$(jq -r '.frontend_url.value // ""' "$TERRAFORM_OUTPUTS")
+          API_URL=$(jq -r '.api_gateway_invoke_url.value' terraform_outputs.json)
+          FRONTEND_URL=$(jq -r '.frontend_url.value' terraform_outputs.json)
+          if [ -z "$API_URL" ] || [ "$API_URL" = "null" ]; then echo "API URL missing" >&2; exit 1; fi
+          API="${API_URL%/}/api"
 
-          if [ -z "$API_URL" ] || [ "$API_URL" = "null" ]; then
-            echo "ERROR: API_URL is empty." >&2
-            exit 1
-          fi
-          if [ -z "$FRONTEND_URL" ] || [ "$FRONTEND_URL" = "null" ]; then
-            echo "ERROR: FRONTEND_URL is empty." >&2
-            exit 1
-          fi
+          status() { curl -sS -o /dev/null -w '%{http_code}' "$@"; }
+          expect() { # <description> <expected...> -- <curl args...>
+            local desc=$1; shift; local expected=(); while [ "$1" != "--" ]; do expected+=("$1"); shift; done; shift
+            local got; got=$(status "$@")
+            for e in "${expected[@]}"; do [ "$got" = "$e" ] && { echo "ok: $desc ($got)"; return; }; done
+            echo "FAIL: $desc — expected ${expected[*]}, got $got" >&2; exit 1
+          }
 
-          LOGIN_ENDPOINT="${API_URL%/}/api/login"
+          expect "malformed login rejected by gateway schema" 400 -- \
+            -X POST "$API/login" -H 'Content-Type: application/json' -d '{}'
+          expect "wrong password rejected" 401 -- \
+            -X POST "$API/login" -H 'Content-Type: application/json' \
+            -d '{"username":"admin","password":"definitely-not-the-real-password"}'
+          expect "transactions list requires a token" 401 403 -- "$API/transactions"
+          expect "payments require a token" 401 403 -- \
+            -X POST "$API/transactions" -H 'Content-Type: application/json' -d '{}'
 
-          # FIX: this used to POST a real, hardcoded admin password
-          # ("password123") to the live login endpoint — which meant the
-          # actual production admin password had to literally be
-          # "password123" for CI to pass, permanently defeating the bcrypt
-          # hashing this project otherwise relies on, and exposing the real
-          # credential to anyone reading this public workflow file.
-          #
-          # Instead we only assert the *shape* of auth behaviour, using
-          # credentials that are guaranteed wrong: a malformed request
-          # returns 400, and a wrong password returns 401. Neither requires
-          # knowing (or committing) the real admin password.
-          echo "Testing that a malformed login request is rejected (400)..."
-          STATUS=$(curl -sS -o /dev/null -w '%{http_code}' \
-            -X POST "$LOGIN_ENDPOINT" \
-            -H 'Content-Type: application/json' \
-            -d '{}')
-          if [ "$STATUS" != "400" ]; then
-            echo "Expected 400 for a missing username/password, got $STATUS" >&2
-            exit 1
-          fi
-
-          echo "Testing that a wrong password is rejected (401)..."
-          STATUS=$(curl -sS -o /dev/null -w '%{http_code}' \
-            -X POST "$LOGIN_ENDPOINT" \
-            -H 'Content-Type: application/json' \
-            -d '{"username":"admin","password":"definitely-not-the-real-password"}')
-          if [ "$STATUS" != "401" ]; then
-            echo "Expected 401 for a wrong password, got $STATUS" >&2
-            exit 1
-          fi
-
-          echo "Verifying protected route rejects unauthenticated requests..."
-          PROTECTED_STATUS=$(curl -sS -o /dev/null -w '%{http_code}' \
-            -X GET "${API_URL%/}/api/transactions")
-          if [ "$PROTECTED_STATUS" != "401" ] && [ "$PROTECTED_STATUS" != "403" ]; then
-            echo "Protected route was reachable without a token (status $PROTECTED_STATUS)" >&2
-            exit 1
-          fi
-          echo "Protected route correctly returned $PROTECTED_STATUS without a token."
-
-          echo "Testing frontend availability at $FRONTEND_URL"
-          FRONTEND_STATUS=$(curl -sS -o frontend_response.html -w '%{http_code}' "$FRONTEND_URL")
-          if [ "$FRONTEND_STATUS" -ge 400 ]; then
-            echo "Frontend returned status $FRONTEND_STATUS" >&2
-            cat frontend_response.html >&2 || true
-            exit 1
-          fi
-          grep -q "Payment" frontend_response.html
-
-          echo "Smoke tests completed successfully."
-
+          HEADERS=$(curl -sS -D - -o frontend.html "$FRONTEND_URL")
+          grep -q "Payment Transaction Simulator" frontend.html
+          for h in content-security-policy strict-transport-security x-content-type-options x-frame-options; do
+            grep -qi "^$h:" <<< "$HEADERS" || { echo "FAIL: frontend is missing the $h header" >&2; exit 1; }
+          done
+          echo "ok: frontend served over CloudFront with security headers"
