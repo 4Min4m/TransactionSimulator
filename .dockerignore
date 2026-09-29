@@ -1,9 +1,0 @@
-node_modules
-.env
-.git
-__pycache__
-*.pyc
-*.pyo
-*.pyd
-.DS_Store
-dist/
