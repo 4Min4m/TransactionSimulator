@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { Bar } from "react-chartjs-2";
-import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from "chart.js";
+import { Chart as ChartJS, ChartData, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from "chart.js";
 import { getTransactions } from "../services/api";
+import { Transaction } from "../types/iso8583";
+import { errorMessage } from "../services/errors";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 export default function TransactionChart() {
-  const [chartData, setChartData] = useState<any>(null);
+  const [chartData, setChartData] = useState<ChartData<"bar"> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -14,21 +16,26 @@ export default function TransactionChart() {
     const fetchData = async () => {
       try {
         const transactions = await getTransactions();
-        const successCount = transactions.filter((tx: any) => tx.status === "APPROVED").length;
-        const failureCount = transactions.filter((tx: any) => tx.status === "DECLINED").length;
+        // Group by ISO 8583 response code: approvals and each decline reason.
+        const byCode = new Map<string, number>();
+        transactions.forEach((tx: Transaction) => {
+          const code = tx.response_code ?? (tx.status === "APPROVED" ? "00" : "??");
+          byCode.set(code, (byCode.get(code) || 0) + 1);
+        });
+        const codes = [...byCode.keys()].sort();
 
         setChartData({
-          labels: ["Successful", "Failed"],
+          labels: codes.map((c) => (c === "00" ? "00 approved" : `${c} declined`)),
           datasets: [
             {
-              label: "Transactions",
-              data: [successCount, failureCount],
-              backgroundColor: ["#4CAF50", "#F44336"],
+              label: "Transactions (last 50)",
+              data: codes.map((c) => byCode.get(c) ?? 0),
+              backgroundColor: codes.map((c) => (c === "00" ? "#16a34a" : "#dc2626")),
             },
           ],
         });
-      } catch (err: any) {
-        setError(err.message || "Failed to fetch transactions");
+      } catch (err) {
+        setError(errorMessage(err, "Failed to fetch transactions"));
       } finally {
         setLoading(false);
       }
@@ -38,7 +45,7 @@ export default function TransactionChart() {
   }, []);
 
   if (loading) return <p>Loading chart...</p>;
-  if (error) return <p className="text-red-600">{error}</p>;
+  if (error) return null; // TransactionHistory already shows the sign-in hint
 
   return (
     <div className="space-y-4 mt-6">
@@ -51,7 +58,7 @@ export default function TransactionChart() {
               responsive: true,
               plugins: {
                 legend: { position: "top" },
-                title: { display: true, text: "Transaction Success vs Failure" },
+                title: { display: true, text: "Outcomes by response code (field 39)" },
               },
             }}
           />
