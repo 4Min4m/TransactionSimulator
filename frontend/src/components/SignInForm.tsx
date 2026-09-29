@@ -3,6 +3,7 @@ import { Lock, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { login } from "../services/api";
 import { setToken } from "../services/auth";
+import { errorMessage } from "../services/errors";
 
 interface SignInFormProps {
   onSignIn: () => void;
@@ -23,7 +24,7 @@ export default function SignInForm({ onSignIn }: SignInFormProps) {
     try {
       const data = await login({
         username: username.trim(),
-        password: password.trim(),
+        password, // never trim a password: spaces can be part of it
       });
 
       // On success the API returns a signed JWT; store it, then enter admin.
@@ -34,8 +35,8 @@ export default function SignInForm({ onSignIn }: SignInFormProps) {
       } else {
         setError(data.error || data.message || "Invalid credentials");
       }
-    } catch (err: any) {
-      setError(err.message || "An error occurred during sign-in");
+    } catch (err) {
+      setError(errorMessage(err, "An error occurred during sign-in"));
     } finally {
       setLoading(false);
     }
