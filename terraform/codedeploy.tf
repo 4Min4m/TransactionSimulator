@@ -1,7 +1,8 @@
 # codedeploy.tf
 # Automated canary deployment + alarm-based rollback for the API Lambda.
 # CodeDeploy shifts traffic on the LIVE alias gradually and rolls back
-# automatically if the CloudWatch alarms below breach during the bake time.
+# automatically if any wired alarm (Lambda errors, API 5XX, API p95 latency;
+# see observability.tf) breaches during the 5-minute bake.
 
 resource "aws_codedeploy_app" "api" {
   name             = "transaction-simulator-api"
@@ -48,6 +49,7 @@ resource "aws_codedeploy_deployment_group" "api" {
     alarms = [
       aws_cloudwatch_metric_alarm.lambda_errors.alarm_name,
       aws_cloudwatch_metric_alarm.api_5xx.alarm_name,
+      aws_cloudwatch_metric_alarm.api_latency_p95.alarm_name,
     ]
   }
 }

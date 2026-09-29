@@ -92,10 +92,8 @@ resource "aws_wafv2_web_acl" "api" {
             # ENDS_WITH (not EXACTLY): for an API Gateway REST API, WAF sees
             # the full stage-prefixed path (e.g. "/prod/api/login"), NOT the
             # bare "/api/login" the Lambda code sees. An EXACTLY match on
-            # "/api/login" would therefore never fire and the login-specific
-            # rate limit would be silently dead. ENDS_WITH matches both the
-            # prefixed and unprefixed forms, so it is correct regardless of
-            # stage name. See docs/ROUND2_CHANGES_fa.md and the README WAF note.
+            # "/api/login" would never fire, silently disabling this rule.
+            # ENDS_WITH is correct regardless of the stage name.
             search_string = "/api/login"
             field_to_match {
               uri_path {}
@@ -127,4 +125,26 @@ resource "aws_wafv2_web_acl" "api" {
 resource "aws_wafv2_web_acl_association" "api" {
   resource_arn = aws_api_gateway_stage.prod_stage.arn
   web_acl_arn  = aws_wafv2_web_acl.api.arn
+}
+
+# --- WAF logging ------------------------------------------------------------
+# Full request logs for blocked/allowed decisions. The Authorization header is
+# redacted so JWTs never land in the logs. The log group name must start
+# with "aws-waf-logs-".
+resource "aws_cloudwatch_log_group" "waf" {
+  #checkov:skip=CKV_AWS_158:AWS-managed encryption; customer-managed KMS is a roadmap item.
+  #checkov:skip=CKV_AWS_338:30-day retention is a deliberate cost choice for a demo stack.
+  name              = "aws-waf-logs-transaction-simulator"
+  retention_in_days = 30
+}
+
+resource "aws_wafv2_web_acl_logging_configuration" "api" {
+  resource_arn            = aws_wafv2_web_acl.api.arn
+  log_destination_configs = [aws_cloudwatch_log_group.waf.arn]
+
+  redacted_fields {
+    single_header {
+      name = "authorization"
+    }
+  }
 }

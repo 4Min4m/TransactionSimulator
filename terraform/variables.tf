@@ -5,12 +5,8 @@ variable "supabase_url" {
 }
 
 variable "supabase_key" {
-  # FIX: this previously said "anon/public key", which directly contradicted
-  # the security model in supabase/rls.sql and README.md — RLS revokes all
-  # access from the anon/authenticated roles, so an anon key here would leave
-  # the Lambdas unable to read or write anything. This MUST be the
-  # service_role key (Project Settings -> API -> service_role secret in the
-  # Supabase dashboard), kept server-side only.
+  # Must be the service_role key: RLS denies the anon key everything.
+  # Stored in Secrets Manager (secrets.tf), never in a Lambda environment.
   description = "Supabase service_role key (server-side only — NOT the anon/public key; RLS denies the anon key entirely, see supabase/rls.sql)"
   type        = string
   sensitive   = true
@@ -47,7 +43,12 @@ variable "monthly_budget_usd" {
 }
 
 variable "allowed_merchant_id" {
-  description = "The single demo merchant id the simulator accepts on POST /api/transactions. Previously hardcoded in lambda.js as an unexplained, unrelated string."
+  description = "The single demo merchant id the simulator accepts. Sent in ISO 8583 field 42, so at most 15 printable ASCII characters."
   type        = string
   default     = "demo-merchant"
+
+  validation {
+    condition     = can(regex("^[ -~]{1,15}$", var.allowed_merchant_id))
+    error_message = "allowed_merchant_id must be 1-15 printable ASCII characters (ISO 8583 field 42)."
+  }
 }

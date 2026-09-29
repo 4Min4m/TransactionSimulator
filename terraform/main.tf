@@ -1,24 +1,15 @@
 # main.tf
-# Provider requirements are consolidated in backend.tf's single
-# `terraform { required_providers { ... } }` block. Terraform allows only one
-# such block per module, so this file intentionally declares no providers.
-#
-# CRITICAL FIX: this file used to contain nothing but the comment above.
-# `lambda_api_gateway.tf` and `batch-worker.tf` both reference
-# aws_s3_bucket.lambda_code_bucket, aws_s3_object.lambda_package, and
-# data.archive_file.lambda_zip — but none of those three resources were
-# defined ANYWHERE in the original module. `terraform validate`/`plan` would
-# have failed immediately with "Reference to undeclared resource". This file
-# now defines them: it zips the `lambda/` directory (which contains
-# lambda.js, authorizer.js, batch-worker.js, secrets.js, shared.js and their
-# node_modules) and uploads that single package to S3, which both Lambda
-# functions and the authorizer deploy from. See
-# docs/FIXES_AND_CHANGES_fa.md for the full list of fixes.
+# Lambda deployment package: the lambda/ directory (handlers + node_modules)
+# is zipped once and uploaded to a private, versioned S3 bucket. All three
+# functions deploy from this single package and differ only by handler.
 
 data "aws_region" "current" {}
 
-# Bucket that holds the zipped Lambda deployment package(s).
 resource "aws_s3_bucket" "lambda_code_bucket" {
+  #checkov:skip=CKV_AWS_18:Access logging for a build-artifact bucket is not worth a second log bucket in a demo stack.
+  #checkov:skip=CKV_AWS_144:Artifacts are rebuilt from git on every deploy; cross-region replication adds cost, not recovery.
+  #checkov:skip=CKV_AWS_145:SSE-S3 (AES256) is used; customer-managed KMS is a roadmap item.
+  #checkov:skip=CKV2_AWS_62:No consumer for S3 event notifications.
   bucket        = "transaction-simulator-lambda-code-${random_string.suffix.result}"
   force_destroy = true
 }
@@ -31,28 +22,6 @@ resource "aws_s3_bucket_public_access_block" "lambda_code_bucket" {
   restrict_public_buckets = true
 }
 
-# Zip the whole lambda/ directory (lambda.js, authorizer.js, batch-worker.js,
-# secrets.js, shared.js, package.json, node_modules). All three Lambda
-# functions (api, authorizer, batch worker) share this one package and are
-# distinguished only by their `handler` setting.
-data "archive_file" "lambda_zip" {
-  type        = "zip"
-  source_dir  = "${path.module}/../lambda"
-  output_path = "${path.module}/.build/lambda.zip"
-  excludes    = ["test"]
-}
-
-resource "aws_s3_object" "lambda_package" {
-  bucket = aws_s3_bucket.lambda_code_bucket.id
-  key    = "lambda-${data.archive_file.lambda_zip.output_sha}.zip"
-  source = data.archive_file.lambda_zip.output_path
-  etag   = data.archive_file.lambda_zip.output_md5
-}
-
-# Server-side encryption for the Lambda code bucket (carried over from the
-# former s3_lambda_code_bucket.tf, which was removed because it defined the
-# same bucket/archive/object as this file and caused duplicate-resource
-# errors — see docs/ROUND2_CHANGES_fa.md, "conflict resolution").
 resource "aws_s3_bucket_server_side_encryption_configuration" "lambda_code_bucket" {
   bucket = aws_s3_bucket.lambda_code_bucket.id
   rule {
@@ -62,11 +31,44 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "lambda_code_bucke
   }
 }
 
-# Keep prior deployment packages so a bad deploy can be rolled back to an
-# earlier object version if ever needed.
+# Versioning keeps earlier packages so a bad deploy can be rolled back...
 resource "aws_s3_bucket_versioning" "lambda_code_bucket" {
   bucket = aws_s3_bucket.lambda_code_bucket.id
   versioning_configuration {
     status = "Enabled"
   }
+}
+
+# ...and the lifecycle rule stops those versions from accumulating forever.
+resource "aws_s3_bucket_lifecycle_configuration" "lambda_code_bucket" {
+  bucket = aws_s3_bucket.lambda_code_bucket.id
+
+  rule {
+    id     = "expire-old-packages"
+    status = "Enabled"
+    filter {}
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 1
+    }
+  }
+
+  depends_on = [aws_s3_bucket_versioning.lambda_code_bucket]
+}
+
+data "archive_file" "lambda_zip" {
+  type        = "zip"
+  source_dir  = "${path.module}/../lambda"
+  output_path = "${path.module}/.build/lambda.zip"
+  excludes    = ["test", "package-lock.json", "local-server.js"]
+}
+
+resource "aws_s3_object" "lambda_package" {
+  bucket = aws_s3_bucket.lambda_code_bucket.id
+  key    = "lambda-${data.archive_file.lambda_zip.output_sha256}.zip"
+  source = data.archive_file.lambda_zip.output_path
+  etag   = data.archive_file.lambda_zip.output_md5
 }
