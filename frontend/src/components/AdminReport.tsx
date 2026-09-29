@@ -1,19 +1,8 @@
 import { useEffect, useState } from "react";
 import { CreditCard, PieChart, ArrowDownUp, Clock } from "lucide-react";
 import { getTransactions } from "../services/api";
-
-interface Transaction {
-  id: string;
-  card_number: string;
-  amount: number;
-  merchant_id: string;
-  status: string;
-  type: string;
-  timestamp: string;
-  created_at: string;
-  updated_at: string;
-  iso8583_message: any;
-}
+import { Transaction } from "../types/iso8583";
+import { errorMessage } from "../services/errors";
 
 export default function AdminReport() {
   const [report, setReport] = useState<{
@@ -21,7 +10,7 @@ export default function AdminReport() {
     totalAmount: number;
     successfulTransactions: number;
     failedTransactions: number;
-    avgResponseTime: number;
+    avgProcessingMs: number | null;
     successRate: number;
     recentActivity: Transaction[];
   } | null>(null);
@@ -35,16 +24,15 @@ export default function AdminReport() {
         const transactions: Transaction[] = await getTransactions();
 
         const totalTransactions = transactions.length;
-        const totalAmount = transactions.reduce((sum, tx) => sum + tx.amount, 0);
+        const totalAmount = transactions.reduce((sum, tx) => sum + Number(tx.amount), 0);
         const successfulTransactions = transactions.filter((tx) => tx.status === "APPROVED").length;
         const failedTransactions = transactions.filter((tx) => tx.status === "DECLINED").length;
         const successRate = totalTransactions > 0 ? (successfulTransactions / totalTransactions) * 100 : 0;
-        // NOTE: this is NOT a real latency measurement. Everything in this
-        // simulator is synthetic (approvals are Math.random()), so there is no
-        // true response-time metric to report. This is a fixed placeholder
-        // shown only to illustrate the dashboard layout; it is labelled
-        // "(simulated)" in the UI so it is never mistaken for a real metric.
-        const avgResponseTime = 120; // simulated placeholder, not measured
+        // Server-side authorization time measured by the Lambda for each
+        // payment (lambda/payments.js), not a client round-trip.
+        const timed = transactions.filter((tx) => typeof tx.processing_ms === "number");
+        const avgProcessingMs =
+          timed.length > 0 ? timed.reduce((sum, tx) => sum + Number(tx.processing_ms), 0) / timed.length : null;
 
         setReport({
           totalTransactions,
@@ -52,11 +40,11 @@ export default function AdminReport() {
           successfulTransactions,
           failedTransactions,
           successRate,
-          avgResponseTime,
+          avgProcessingMs,
           recentActivity: transactions.slice(0, 5),
         });
-      } catch (err: any) {
-        setError(err.message || "An error occurred while fetching transactions");
+      } catch (err) {
+        setError(errorMessage(err, "An error occurred while fetching transactions"));
       } finally {
         setLoading(false);
       }
@@ -118,8 +106,10 @@ export default function AdminReport() {
           <div className="bg-white shadow rounded-lg p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-500">Avg Response Time (simulated)</p>
-                <p className="text-2xl font-bold text-gray-900">{report.avgResponseTime}ms</p>
+                <p className="text-sm font-medium text-gray-500">Avg Authorization Time</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {report.avgProcessingMs === null ? "—" : `${report.avgProcessingMs.toFixed(2)} ms`}
+                </p>
               </div>
               <Clock className="h-10 w-10 text-purple-500" />
             </div>
@@ -132,21 +122,19 @@ export default function AdminReport() {
         <div className="bg-white shadow rounded-lg p-4">
           <h3 className="text-lg font-medium text-gray-800 mb-4">Recent Activity (Last 5 Transactions)</h3>
           <div className="space-y-3">
-            {report.recentActivity.map((tx, index) => (
-              <div key={index} className="flex items-center justify-between p-2 border-b border-gray-100">
+            {report.recentActivity.map((tx) => (
+              <div key={tx.id} className="flex items-center justify-between p-2 border-b border-gray-100">
                 <div className="flex items-center">
                   <div
                     className={`w-2 h-2 rounded-full mr-2 ${
                       tx.status === "APPROVED" ? "bg-green-500" : "bg-red-500"
                     }`}
                   ></div>
-                  <span className="font-medium text-sm">
-                    {tx.card_number?.substring(tx.card_number.length - 4).padStart(16, "*")}
-                  </span>
+                  <span className="font-mono text-sm">{tx.card_number}</span>
                 </div>
-                <div className="text-sm text-gray-500">${tx.amount?.toFixed(2) || "0.00"}</div>
+                <div className="text-sm text-gray-500">${Number(tx.amount).toFixed(2)}</div>
                 <div className={`text-xs ${tx.status === "APPROVED" ? "text-green-600" : "text-red-600"}`}>
-                  {tx.status === "APPROVED" ? "Approved" : "Declined"}
+                  {tx.status === "APPROVED" ? "Approved" : "Declined"} ({tx.response_code ?? "—"})
                 </div>
               </div>
             ))}
