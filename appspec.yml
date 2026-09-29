@@ -9,7 +9,7 @@
 # Traffic shifting + rollback behaviour come from the CodeDeploy deployment
 # group in terraform/codedeploy.tf:
 #   - deployment config: CodeDeployDefault.LambdaCanary10Percent5Minutes
-#   - auto-rollback on the CloudWatch alarms (Lambda errors, API 5XX).
+#   - auto-rollback on the CloudWatch alarms (Lambda errors, API 5XX, API p95 latency).
 #
 # No BeforeAllowTraffic / AfterAllowTraffic hooks are used: pre-traffic
 # validation is already done by the `pre-traffic-validation` CI job (which
