@@ -163,7 +163,7 @@ Each function has its own IAM role (`terraform/iam.tf`):
 
 | Layer          | Technology                                                                 |
 |----------------|----------------------------------------------------------------------------|
-| Frontend       | React 18, TypeScript, Vite, Tailwind CSS, Chart.js                         |
+| Frontend       | React 18, TypeScript, Vite, Tailwind CSS                                   |
 | Backend        | AWS Lambda (Node.js 22), API Gateway (REST), SQS                           |
 | Payments       | ISO 8583:1987 ASCII codec, Luhn, BIN-based scheme detection                |
 | Auth           | HS256 JWT, bcrypt, API Gateway TOKEN authorizer                            |
@@ -184,7 +184,7 @@ Each function has its own IAM role (`terraform/iam.tf`):
 .
 ├── frontend/                 React app, served via CloudFront
 │   └── src/
-│       ├── components/       forms, history, chart, admin dashboard
+│       ├── components/       forms, sidebar, ui primitives, admin dashboard
 │       ├── services/         api.ts (fetch + Bearer), auth.ts (token storage)
 │       └── types/            API types + the test-card list
 ├── lambda/                   one package, three handlers
