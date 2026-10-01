@@ -1,27 +1,29 @@
-import { useState } from "react";
-import { CreditCard } from "lucide-react";
-import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import Sidebar from "./components/Sidebar";
 import TransactionForm from "./components/TransactionForm";
 import BatchForm from "./components/BatchForm";
-import TransactionHistory from "./components/TransactionHistory";
-import TransactionChart from "./components/TransactionChart";
-import SignInForm from "./components/SignInForm";
 import AdminReport from "./components/AdminReport";
-import { isAuthenticated, clearToken } from "./services/auth";
+import SignInForm from "./components/SignInForm";
+import { isAuthenticated, clearToken, AUTH_EXPIRED_EVENT } from "./services/auth";
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"single" | "batch">("single");
   // Initialize from a (non-expired) token so the session survives a refresh.
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(isAuthenticated());
-  const [showSignIn, setShowSignIn] = useState(false);
-  // Bumped after every payment/batch so history and chart reload.
-  const [dataVersion, setDataVersion] = useState(0);
-  const refreshData = () => setDataVersion((v) => v + 1);
+  const [signIn, setSignIn] = useState<{ open: boolean; notice?: string }>({ open: false });
+
+  useEffect(() => {
+    const onExpired = () => setIsLoggedIn(false);
+    window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+  }, []);
+
+  const openSignIn = useCallback((notice?: string) => setSignIn({ open: true, notice }), []);
+  const closeSignIn = useCallback(() => setSignIn({ open: false }), []);
 
   const handleSignIn = () => {
     setIsLoggedIn(true);
-    setShowSignIn(false);
-    refreshData();
+    closeSignIn();
   };
 
   const handleSignOut = () => {
@@ -31,121 +33,21 @@ export default function App() {
 
   return (
     <Router>
-      <div className="min-h-screen bg-gray-50">
-        <div className="max-w-2xl mx-auto p-6 relative">
-          <div className="text-center mb-8">
-            <div className="flex items-center justify-center gap-2 mb-4">
-              <CreditCard className="w-8 h-8 text-indigo-600" />
-              <h1 className="text-3xl font-bold text-gray-900">
-                Payment Transaction Simulator
-              </h1>
-            </div>
-            <p className="text-gray-600">
-              Authorize test payments end to end: validation, issuer rules, ISO 8583 0100/0110 messages and
-              idempotent retries
-            </p>
-          </div>
+      <div className="min-h-screen md:grid md:grid-cols-[232px_minmax(0,1fr)]">
+        <Sidebar isLoggedIn={isLoggedIn} onSignIn={() => openSignIn()} onSignOut={handleSignOut} />
 
-          {/* Sign In / Sign Out buttons */}
-          <div className="flex justify-between items-center mb-4">
-            <nav className="flex gap-4 text-sm">
-              <Link to="/" className="text-indigo-700 hover:underline">
-                Simulator
-              </Link>
-              {isLoggedIn && (
-                <Link to="/admin" className="text-indigo-700 hover:underline">
-                  Admin dashboard
-                </Link>
-              )}
-            </nav>
-            {!isLoggedIn ? (
-              <button
-                onClick={() => setShowSignIn(true)}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
-              >
-                Sign In
-              </button>
-            ) : (
-              <button
-                onClick={handleSignOut}
-                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
-              >
-                Sign Out
-              </button>
-            )}
-          </div>
-
+        <main className="flex w-full min-w-0 max-w-[1280px] flex-col gap-7 px-5 pb-14 pt-8 md:px-[clamp(20px,3vw,44px)]">
           <Routes>
-            <Route
-              path="/"
-              element={
-                <div className="bg-white shadow rounded-lg p-6">
-                  <div className="border-b border-gray-200 mb-6">
-                    <nav className="-mb-px flex space-x-8">
-                      <button
-                        onClick={() => setActiveTab("single")}
-                        className={`${
-                          activeTab === "single"
-                            ? "border-indigo-500 text-indigo-600"
-                            : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                        } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-                      >
-                        Single Transaction
-                      </button>
-                      <button
-                        onClick={() => setActiveTab("batch")}
-                        className={`${
-                          activeTab === "batch"
-                            ? "border-indigo-500 text-indigo-600"
-                            : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                        } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-                      >
-                        Batch Testing
-                      </button>
-                    </nav>
-                  </div>
-
-                  {activeTab === "single" ? (
-                    <TransactionForm onProcessed={refreshData} />
-                  ) : (
-                    <BatchForm onCompleted={refreshData} />
-                  )}
-                  <TransactionHistory key={`history-${dataVersion}`} />
-                  <TransactionChart key={`chart-${dataVersion}`} />
-                </div>
-              }
-            />
-            <Route
-              path="/admin"
-              element={
-                isLoggedIn ? (
-                  <div className="bg-white shadow rounded-lg p-6">
-                    <AdminReport />
-                  </div>
-                ) : (
-                  <div className="text-center text-red-600">
-                    Please sign in to access the admin dashboard.
-                  </div>
-                )
-              }
-            />
+            <Route path="/" element={<TransactionForm onRequireSignIn={() => openSignIn()} />} />
+            <Route path="/batch" element={<BatchForm isLoggedIn={isLoggedIn} onRequireSignIn={openSignIn} />} />
+            <Route path="/admin" element={<AdminReport isLoggedIn={isLoggedIn} onRequireSignIn={() => openSignIn()} />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+        </main>
 
-          {/* Modal for SignInForm */}
-          {showSignIn && !isLoggedIn && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-              <div className="relative">
-                <SignInForm onSignIn={handleSignIn} />
-                <button
-                  onClick={() => setShowSignIn(false)}
-                  className="absolute top-4 right-4 text-white bg-red-600 rounded-full w-8 h-8 flex items-center justify-center"
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+        {signIn.open && !isLoggedIn && (
+          <SignInForm onSignIn={handleSignIn} onClose={closeSignIn} notice={signIn.notice} />
+        )}
       </div>
     </Router>
   );

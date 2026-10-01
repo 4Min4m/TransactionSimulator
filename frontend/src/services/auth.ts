@@ -8,6 +8,10 @@
 
 const TOKEN_KEY = "ts_auth_token";
 
+// Fired on window when the API rejects our token (401/403), so the shell can
+// flip back to the signed-out state without a reload.
+export const AUTH_EXPIRED_EVENT = "ts:auth-expired";
+
 export const setToken = (token: string): void => {
   localStorage.setItem(TOKEN_KEY, token);
 };
@@ -39,4 +43,12 @@ export const isAuthenticated = (): boolean => {
   if (!payload || !payload.exp) return false;
   const nowSeconds = Math.floor(Date.now() / 1000);
   return payload.exp > nowSeconds;
+};
+
+// Token expiry as epoch milliseconds, or null if there is no valid token.
+export const getTokenExpiry = (): number | null => {
+  const token = getToken();
+  if (!token) return null;
+  const payload = decodePayload(token);
+  return payload?.exp ? payload.exp * 1000 : null;
 };

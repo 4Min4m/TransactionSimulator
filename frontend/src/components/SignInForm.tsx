@@ -1,107 +1,103 @@
-import { useState } from "react";
-import { Lock, Loader2 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState, type FormEvent } from "react";
 import { login } from "../services/api";
 import { setToken } from "../services/auth";
-import { errorMessage } from "../services/errors";
+import { Field, inputCls, primaryBtn } from "./ui";
 
 interface SignInFormProps {
   onSignIn: () => void;
+  onClose: () => void;
+  notice?: string;
 }
 
-export default function SignInForm({ onSignIn }: SignInFormProps) {
+export default function SignInForm({ onSignIn, onClose, notice }: SignInFormProps) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(notice ?? "");
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (!username.trim() || !password) return setError("Enter a username and password.");
     setError("");
     setLoading(true);
-
     try {
-      const data = await login({
-        username: username.trim(),
-        password, // never trim a password: spaces can be part of it
-      });
-
-      // On success the API returns a signed JWT; store it, then enter admin.
+      const data = await login({ username: username.trim(), password });
       if (data.token) {
         setToken(data.token);
         onSignIn();
-        navigate("/admin");
       } else {
         setError(data.error || data.message || "Invalid credentials");
       }
     } catch (err) {
-      setError(errorMessage(err, "An error occurred during sign-in"));
+      setError(err instanceof Error ? err.message : "An error occurred during sign-in");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="relative w-full max-w-md mx-4">
-      <div className="bg-white/90 backdrop-blur-lg rounded-2xl shadow-2xl p-8 space-y-8">
-        <div className="text-center">
-          <div className="flex justify-center mb-4">
-            <div className="bg-indigo-600 p-3 rounded-2xl">
-              <Lock className="h-8 w-8 text-white" />
-            </div>
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 grid place-items-center bg-[rgba(6,9,8,0.72)] p-5 backdrop-blur-[3px]"
+    >
+      <form
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={handleSubmit}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="signin-title"
+        className="flex w-full max-w-[400px] flex-col gap-[18px] rounded-xl border border-line bg-panel p-[26px] shadow-[0_24px_60px_rgba(0,0,0,0.5)]"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <span id="signin-title" className="text-[19px] font-semibold tracking-tight">Sign in</span>
+            <span className="text-[13.5px] text-muted">Admin access to protected API routes</span>
           </div>
-          <h2 className="text-3xl font-bold tracking-tight text-gray-900">Admin Sign In</h2>
-          <p className="mt-2 text-sm text-gray-600">Sign in to access the admin dashboard</p>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="h-[30px] w-[30px] rounded-md border border-line text-sm text-muted hover:border-faint hover:text-fg"
+          >
+            ✕
+          </button>
         </div>
 
-        <form className="space-y-6" onSubmit={handleSubmit}>
-          {error && (
-            <div className="p-4 rounded-lg bg-red-50 border border-red-200">
-              <p className="text-sm text-red-600">{error}</p>
-            </div>
-          )}
+        <Field label="Username">
+          <input
+            autoFocus
+            autoComplete="username"
+            className={`${inputCls} font-sans`}
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+          />
+        </Field>
+        <Field label="Password">
+          <input
+            type="password"
+            autoComplete="current-password"
+            className={`${inputCls} font-sans`}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </Field>
 
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
-              <input
-                type="text"
-                className="block w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-white/50 backdrop-blur-sm"
-                placeholder="Enter your username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-              />
-            </div>
+        {error && <span className="text-[13px] text-bad">{error}</span>}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-              <input
-                type="password"
-                className="block w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-white/50 backdrop-blur-sm"
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-          </div>
+        <button type="submit" disabled={loading} className={primaryBtn}>
+          {loading ? "Verifying…" : "Sign in"}
+        </button>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full flex items-center justify-center px-4 py-3 border border-transparent text-sm font-medium rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? (
-              <Loader2 className="animate-spin h-5 w-5" />
-            ) : (
-              <>
-                <Lock className="h-5 w-5 mr-2" />
-                Sign in
-              </>
-            )}
-          </button>
-        </form>
-      </div>
+        <div className="border-t border-line2 pt-3.5 font-mono text-[11px] leading-relaxed text-dim">
+          bcrypt check · timing-safe · HS256 JWT · rate-limited by WAF on /api/login
+        </div>
+      </form>
     </div>
   );
 }

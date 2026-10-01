@@ -1,3 +1,15 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-bg font-sans text-fg antialiased;
+  }
+  a {
+    @apply text-ok hover:text-fg;
+  }
+}
